@@ -83,8 +83,8 @@ class VGHubertForSyllableDiscovery(nn.Module):
         units = self.quantizer2[units]
 
         # duplicated syllabic units
-        repeats = frame_boundary[:, 1] - frame_boundary[:, 0]
-        duplicated_units = np.repeat(units, repeats)
+        durations = frame_boundary[:, 1] - frame_boundary[:, 0]
+        duplicated_units = np.repeat(units, durations)
         return {
             "units": units,
             "duplicated_units": duplicated_units,
@@ -92,6 +92,7 @@ class VGHubertForSyllableDiscovery(nn.Module):
             "frame_boundary": frame_boundary,
             "hidden_states": hidden_states,
             "frame_similarity": frame_similarity,
+            "durations": durations,
         }
 
 

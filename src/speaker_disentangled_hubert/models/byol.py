@@ -43,7 +43,7 @@ class BYOL(nn.Module):
         self.ema_decay = ema_decay
         self.init_last_layer = init_last_layer
 
-        self.student = HubertModel.from_pretrained(model_name_or_path)
+        self.student = HubertModel.from_pretrained(model_name_or_path, weights_only=False)
         self.student_projector = MLP(
             self.student.config.hidden_size,
             head_out_size,
@@ -314,7 +314,7 @@ class BYOLForSequenceClassification(nn.Module):
             if name.startswith("student."):
                 student_state_dict[name[8:]] = state_dict[name]
 
-        self.hubert = HubertModel.from_pretrained("facebook/hubert-base-ls960")
+        self.hubert = HubertModel.from_pretrained("facebook/hubert-base-ls960", weights_only=False)
         self.hubert.load_state_dict(student_state_dict)
         self.projector = nn.Linear(self.hubert.config.hidden_size, classifier_proj_size)
         self.classifier = nn.Linear(classifier_proj_size, num_labels, bias=False)

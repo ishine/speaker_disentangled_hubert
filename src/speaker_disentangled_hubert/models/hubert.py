@@ -42,7 +42,7 @@ class HubertForSyllableDiscovery(nn.Module):
 
         self.processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base-960h")
 
-        self.model = HubertModel.from_pretrained(checkpoint_path)
+        self.model = HubertModel.from_pretrained(checkpoint_path, weights_only=False)
         self.model.eval()
 
         self.quantizer1 = joblib.load(quantizer1_path) if quantizer1_path else None
@@ -91,7 +91,7 @@ class HubertForSequenceClassification(nn.Module):
         segmentation_layer: int = 8,
     ):
         super().__init__()
-        self.hubert = HubertModel.from_pretrained(model_name_or_path)
+        self.hubert = HubertModel.from_pretrained(model_name_or_path, weights_only=False)
         self.projector = nn.Linear(self.hubert.config.hidden_size, classifier_proj_size)
         self.classifier = nn.Linear(classifier_proj_size, num_labels, bias=False)
 

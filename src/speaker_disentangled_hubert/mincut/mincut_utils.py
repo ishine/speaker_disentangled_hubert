@@ -54,10 +54,12 @@ def mincut_wrapper(ckpt_path):
     ckpt = np.load(ckpt_path, allow_pickle=True)[()]
     hidden_states = ckpt["hidden_states"]  # (n_frames, 768)
 
-    boundaries, pooled_feat, _ = min_cut(hidden_states)
+    boundaries, pooled_feat, frame_boundary = min_cut(hidden_states)
+    durations = frame_boundary[:, 1] - frame_boundary[:, 0]
 
     ckpt["segments"] = boundaries
     ckpt["segment_features"] = pooled_feat
+    ckpt["durations"] = durations
     np.save(ckpt_path, ckpt)
 
 

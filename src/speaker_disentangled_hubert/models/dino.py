@@ -44,7 +44,7 @@ class DINO(nn.Module):
         self.ema_decay = ema_decay
         self.init_last_layer = init_last_layer
 
-        self.student = HubertModel.from_pretrained(model_name_or_path)
+        self.student = HubertModel.from_pretrained(model_name_or_path, weights_only=False)
         self.student_head = DINOHead(
             self.student.config.hidden_size,
             head_out_size,

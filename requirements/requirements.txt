@@ -12,4 +12,4 @@ soundfile==0.12.1
 tensorboard==2.17.0
 torch==2.1.2+cu121
 torchaudio==2.1.2+cu121
-transformers==4.34.0
+transformers==4.47.1

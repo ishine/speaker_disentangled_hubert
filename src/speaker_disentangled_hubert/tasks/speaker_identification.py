@@ -24,7 +24,7 @@ def evaluate(config, data_loader, model, writer: Optional[SummaryWriter] = None,
     model.eval()
     accuracy = 0
 
-    with torch.cuda.amp.autocast(enabled=config.common.fp16):
+    with torch.amp.autocast("cuda", enabled=config.common.fp16):
         for batch in tqdm(data_loader, disable=config.common.disable_tqdm):
             outputs = model(
                 input_values=batch["waveform"].cuda(),
@@ -86,7 +86,7 @@ def speaker_identification(config):
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.optim.lr, weight_decay=config.optim.weight_decay)
 
-    scaler = torch.cuda.amp.GradScaler(enabled=config.common.fp16)
+    scaler = torch.amp.GradScaler("cuda", enabled=config.common.fp16)
     writer = SummaryWriter()
 
     last_epoch = 0
@@ -94,7 +94,7 @@ def speaker_identification(config):
     best_dev_accuracy = 0
 
     if Path(config.path.checkpoint).is_file():
-        ckpt = torch.load(config.path.checkpoint)
+        ckpt = torch.load(config.path.checkpoint, weights_only=True)
 
         last_epoch = ckpt["epoch"]
         step = ckpt["step"]
@@ -111,7 +111,7 @@ def speaker_identification(config):
         model.hubert.eval()
 
         for batch in tqdm(train_loader, desc=f"epoch {epoch}", disable=config.common.disable_tqdm):
-            with torch.cuda.amp.autocast(enabled=config.common.fp16):
+            with torch.amp.autocast("cuda", enabled=config.common.fp16):
                 loss = model(
                     batch["waveform"].cuda(),
                     batch["attention_mask"].cuda(),
@@ -150,7 +150,7 @@ def speaker_identification(config):
             torch.save(ckpt, config.path.checkpoint)
 
     # test the best model
-    ckpt = torch.load(config.path.checkpoint)
+    ckpt = torch.load(config.path.checkpoint, weights_only=True)
     model.load_state_dict(ckpt["model"])
     test_accuracy = evaluate(config, test_loader, model)
     print(f"test accuracy: {test_accuracy}")

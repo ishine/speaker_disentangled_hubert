@@ -236,7 +236,7 @@ class DINOForSyllableDiscovery(nn.Module):
         super().__init__()
         self.segmentation_layer = segmentation_layer
 
-        state_dict = torch.load(checkpoint_path)["model"]
+        state_dict = torch.load(checkpoint_path, weights_only=True)["model"]
         head_hidden_size, _ = state_dict["student_head.mlp.0.weight"].shape
         head_out_size, head_bottleneck_size = state_dict[
             "student_head.last_layer.parametrizations.weight.original1"

@@ -87,7 +87,7 @@ def train(config):
         decay_steps,
     )
 
-    scaler = torch.cuda.amp.GradScaler(enabled=config.common.fp16)
+    scaler = torch.amp.GradScaler("cuda", enabled=config.common.fp16)
     writer = SummaryWriter()
 
     last_epoch = 0
@@ -95,7 +95,7 @@ def train(config):
 
     # resume training
     if Path(config.path.checkpoint).is_file():
-        ckpt = torch.load(config.path.checkpoint)
+        ckpt = torch.load(config.path.checkpoint, weights_only=True)
 
         last_epoch = ckpt["epoch"]
         step = ckpt["step"]
@@ -116,7 +116,7 @@ def train(config):
         model.train()
 
         for batch in tqdm(train_loader, desc=f"epoch {epoch}", disable=config.common.disable_tqdm):
-            with torch.cuda.amp.autocast(enabled=config.common.fp16):
+            with torch.amp.autocast("cuda", enabled=config.common.fp16):
                 loss = model(
                     teacher_input_values=batch["waveform"].cuda(),
                     student_input_values=batch["perturbed_waveform"].cuda(),

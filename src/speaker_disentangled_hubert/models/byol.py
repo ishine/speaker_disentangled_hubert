@@ -246,7 +246,7 @@ class BYOLForSyllableDiscovery(nn.Module):
         super().__init__()
         self.segmentation_layer = segmentation_layer
 
-        state_dict = torch.load(checkpoint_path)["model"]
+        state_dict = torch.load(checkpoint_path, weights_only=True)["model"]
         head_out_size, head_hidden_size = state_dict["student_projector.mlp.3.weight"].shape
 
         self.model = BYOL(head_out_size=head_out_size, head_hidden_size=head_hidden_size)
@@ -308,7 +308,7 @@ class BYOLForSequenceClassification(nn.Module):
         segmentation_layer: int = 8,
     ):
         super().__init__()
-        state_dict = torch.load(model_name_or_path)["model"]
+        state_dict = torch.load(model_name_or_path, weights_only=True)["model"]
         student_state_dict = OrderedDict()
         for name in state_dict:
             if name.startswith("student."):

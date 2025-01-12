@@ -6,6 +6,7 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
+import torch
 
 from ...sdhubert.utils.syllable import BoundaryDetectionEvaluator, match_cluster
 from ..utils.misc import compute_cluster_purity, compute_mutual_info, compute_syllable_purity
@@ -17,8 +18,8 @@ def evaluate(config):
         dataset = json.load(f)
 
     # load clustering model
-    quantizer1 = joblib.load(config.path.quantizer1)
-    quantizer2 = np.load(config.path.quantizer2)
+    quantizer1 = torch.from_numpy(joblib.load(config.path.quantizer1).cluster_centers_).cuda()
+    quantizer2 = torch.from_numpy(np.load(config.path.quantizer2)).cuda()
 
     matching_counter = Counter()
     syllable_counter = Counter()
@@ -41,8 +42,8 @@ def evaluate(config):
 
         # syllables
         ref_syllables = np.array([re.sub("[0-3]", "", ref["label"]) for ref in sample["syllables"]])
-        hyp_syllables = quantizer1.predict(ckpt["segment_features"])
-        hyp_syllables = quantizer2[hyp_syllables]
+        hyp_syllables = torch.cdist(torch.from_numpy(ckpt["segment_features"]).cuda(), quantizer1).argmin(1)
+        hyp_syllables = quantizer2[hyp_syllables].cpu().numpy()
 
         matching_counter.update(zip(ref_syllables[ref_indices], hyp_syllables[hyp_indices]))
         syllable_counter.update(ref_syllables[ref_indices])

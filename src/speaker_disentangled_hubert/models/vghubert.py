@@ -55,8 +55,10 @@ class VGHubertForSyllableDiscovery(nn.Module):
         self.segmentation_layer = segmentation_layer
         self.model = load_vghubert(checkpoint_path)
 
-        self.quantizer1 = joblib.load(quantizer1_path) if quantizer1_path else None
-        self.quantizer2 = np.load(quantizer2_path) if quantizer2_path else None
+        self.register_buffer(
+            "quantizer1", torch.from_numpy(joblib.load(quantizer1_path).cluster_centers_) if quantizer1_path else None
+        )
+        self.register_buffer("quantizer2", torch.from_numpy(np.load(quantizer2_path)) if quantizer2_path else None)
 
     @torch.inference_mode()
     def get_hidden_states(self, input_values: torch.Tensor) -> np.ndarray:
@@ -79,8 +81,8 @@ class VGHubertForSyllableDiscovery(nn.Module):
         boundary, segment_features, frame_boundary = min_cut(hidden_states)
 
         # deduplicated syllabic units
-        units = self.quantizer1.predict(segment_features)
-        units = self.quantizer2[units]
+        units = torch.cdist(torch.from_numpy(segment_features).to(self.quantizer1.device), self.quantizer1).argmin(1)
+        units = self.quantizer2[units].cpu().numpy()
 
         # duplicated syllabic units
         durations = frame_boundary[:, 1] - frame_boundary[:, 0]

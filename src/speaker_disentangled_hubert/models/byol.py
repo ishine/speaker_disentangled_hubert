@@ -247,14 +247,19 @@ class BYOLForSyllableDiscovery(nn.Module):
         self.segmentation_layer = segmentation_layer
 
         state_dict = torch.load(checkpoint_path, weights_only=True)["model"]
-        head_out_size, head_hidden_size = state_dict["student_projector.mlp.3.weight"].shape
+        student_state_dict = OrderedDict()
+        for name in state_dict:
+            if name.startswith("student."):
+                student_state_dict[name[8:]] = state_dict[name]
 
-        self.model = BYOL(head_out_size=head_out_size, head_hidden_size=head_hidden_size)
-        self.model.load_state_dict(state_dict)
+        self.model = HubertModel.from_pretrained("facebook/hubert-base-ls960", weights_only=False)
+        self.model.load_state_dict(student_state_dict)
         self.model.eval()
 
-        self.quantizer1 = joblib.load(quantizer1_path) if quantizer1_path else None
-        self.quantizer2 = np.load(quantizer2_path) if quantizer2_path else None
+        self.register_buffer(
+            "quantizer1", torch.from_numpy(joblib.load(quantizer1_path).cluster_centers_) if quantizer1_path else None
+        )
+        self.register_buffer("quantizer2", torch.from_numpy(np.load(quantizer2_path)) if quantizer2_path else None)
 
     @classmethod
     def from_hf_hub(cls) -> "BYOLForSyllableDiscovery":
@@ -270,7 +275,7 @@ class BYOLForSyllableDiscovery(nn.Module):
 
     @torch.inference_mode()
     def get_hidden_states(self, input_values: torch.Tensor) -> np.ndarray:
-        hidden_states, _ = self.model.student_forward(input_values)
+        hidden_states = self.model(input_values, output_hidden_states=True).hidden_states
         return hidden_states[self.segmentation_layer].squeeze(0).cpu().numpy()
 
     def forward(self, input_values: torch.Tensor) -> Dict[str, np.ndarray]:
@@ -282,8 +287,8 @@ class BYOLForSyllableDiscovery(nn.Module):
         boundary, segment_features, frame_boundary = min_cut(hidden_states)
 
         # deduplicated syllabic units
-        units = self.quantizer1.predict(segment_features)
-        units = self.quantizer2[units]
+        units = torch.cdist(torch.from_numpy(segment_features).to(self.quantizer1.device), self.quantizer1).argmin(1)
+        units = self.quantizer2[units].cpu().numpy()
 
         # duplicated syllabic units
         durations = frame_boundary[:, 1] - frame_boundary[:, 0]

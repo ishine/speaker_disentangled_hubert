@@ -5,8 +5,8 @@ from torch.utils.data import ConcatDataset
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from ..models.byol import BYOL
-from ..models.dino import DINO
+from ..models.s5hubert import S5Hubert
+from ..models.s5hubert_dino import S5HubertDino
 from ..utils.data import LibriSpeech
 from ..utils.misc import fix_random_seed, get_tri_stage_schedule
 
@@ -43,16 +43,16 @@ def train(config):
         num_workers=config.dataloader.num_workers,
     )
 
-    if config.model.model_type == "byol":
-        model = BYOL(
+    if config.model.model_type == "s5hubert":
+        model = S5Hubert(
             model_name_or_path=config.model.model_name_or_path,
             init_last_layer=config.model.init_last_layer,
             head_out_size=config.model.head_out_size,
             head_hidden_size=config.model.head_hidden_size,
             ema_decay=config.model.ema_decay,
         ).cuda()
-    elif config.model.model_type == "dino":
-        model = DINO(
+    elif config.model.model_type == "s5hubert_dino":
+        model = S5HubertDino(
             model_name_or_path=config.model.model_name_or_path,
             init_last_layer=config.model.init_last_layer,
             head_out_size=config.model.head_out_size,

@@ -16,7 +16,7 @@ dataloader:
   num_workers: 30
 
 model:
-  model_type: "byol"
+  model_type: "s5hubert"
   model_name_or_path: "models/byol/checkpoint"
   classifier_proj_size: 256
   num_labels: 1251 # VoxCeleb1

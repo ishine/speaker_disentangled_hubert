@@ -1,4 +1,4 @@
-# Self-Supervised Syllable Discovery Based on Speaker-Disentangled HuBERT
+# S5-HuBERT: Self-Supervised Speaker-Separated Syllable HuBERT
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10-blue.svg)](https://www.python.org)
@@ -25,12 +25,12 @@ sh scripts/setup.sh
 ```python
 import torchaudio
 
-from src.speaker_disentangled_hubert import BYOLForSyllableDiscovery
+from src.speaker_disentangled_hubert import S5HubertForSyllableDiscovery
 
 wav_path = "/path/to/wav"
 
 # download a pretrained model from hugging face hub
-model = BYOLForSyllableDiscovery.from_hf_hub().cuda()
+model = S5HubertForSyllableDiscovery.from_hf_hub().cuda()
 
 # load a waveform
 waveform, sr = torchaudio.load(wav_path)
@@ -54,7 +54,7 @@ Google Colab demo is found [here](https://colab.research.google.com/github/ryota
 Download models from the following links.
 | Model                       | Link                                                                                                                    |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Speaker-disentangled HuBERT | [download](https://huggingface.co/ryota-komatsu/speaker_disentangled_hubert/resolve/main/models/byol/checkpoint)        |
+| S5-HuBERT                   | [download](https://huggingface.co/ryota-komatsu/speaker_disentangled_hubert/resolve/main/models/byol/checkpoint)        |
 | KMeans                      | [download](https://huggingface.co/ryota-komatsu/speaker_disentangled_hubert/resolve/main/models/byol/quantizer1.joblib) |
 | Agglomerative clustering    | [download](https://huggingface.co/ryota-komatsu/speaker_disentangled_hubert/resolve/main/models/byol/quantizer2.npy)    |
 

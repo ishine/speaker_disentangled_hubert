@@ -1,1 +1,1 @@
-from .models.byol import BYOLForSyllableDiscovery
+from .models.s5hubert import S5HubertForSyllableDiscovery

@@ -16,29 +16,27 @@
 # limitations under the License.
 
 from collections import OrderedDict
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Union
 
 import joblib
 import numpy as np
 import torch
+from huggingface_hub import hf_hub_download
 from torch import nn
+from transformers.modeling_outputs import SequenceClassifierOutput
 from transformers.models.hubert.modeling_hubert import HubertEncoderLayer, HubertModel
 
 from ..mincut.mincut_utils import min_cut
-from .modules import DINOHead, DINOLoss, init_module
+from .modules import MLP, init_module
 
 
-class DINO(nn.Module):
+class S5Hubert(nn.Module):
     def __init__(
         self,
         model_name_or_path="facebook/hubert-base-ls960",
         init_last_layer: int = 3,
-        head_out_size: int = 4096,
+        head_out_size: int = 256,
         head_hidden_size: int = 2048,
-        head_bottleneck_size: int = 256,
-        teacher_temp: float = 0.04,
-        student_temp: float = 0.1,
-        center_momentum: float = 0.9,
         ema_decay: float = 0.999,
     ):
         super().__init__()
@@ -46,26 +44,36 @@ class DINO(nn.Module):
         self.init_last_layer = init_last_layer
 
         self.student = HubertModel.from_pretrained(model_name_or_path, weights_only=False)
-        self.student_head = DINOHead(
+        self.student_projector = MLP(
             self.student.config.hidden_size,
             head_out_size,
             head_hidden_size,
-            head_bottleneck_size,
         )
-        self.loss_fn = DINOLoss(head_out_size, teacher_temp, student_temp, center_momentum)
+        self.student_predictor = MLP(
+            head_out_size,
+            head_out_size,
+            head_hidden_size,
+            norm_outputs=True,
+        )
+        self.loss_fn = nn.MSELoss()
 
         self.reset_parameters(init_last_layer)
-        self.make_teacher(head_out_size, head_hidden_size, head_bottleneck_size)
+        self.make_teacher(head_out_size, head_hidden_size)
 
     def reset_parameters(self, init_last_layer: int = 3):
         for m in self.student.encoder.layers[-init_last_layer:].modules():
             init_module(m)
 
+        for m in self.student_projector.modules():
+            init_module(m)
+
+        for m in self.student_predictor.modules():
+            init_module(m)
+
     def make_teacher(
         self,
-        head_out_size: int = 4096,
+        head_out_size: int = 256,
         head_hidden_size: int = 2048,
-        head_bottleneck_size: int = 256,
     ):
         self.teacher_encoder_layers = nn.ModuleList(
             [HubertEncoderLayer(self.student.config) for _ in range(self.student.config.num_hidden_layers)]
@@ -73,21 +81,21 @@ class DINO(nn.Module):
         self.teacher_encoder_layers.load_state_dict(self.student.encoder.layers.state_dict())
         self.teacher_encoder_layers.requires_grad_(False)
 
-        self.teacher_head = DINOHead(
+        self.teacher_projector = MLP(
             self.student.config.hidden_size,
             head_out_size,
             head_hidden_size,
-            head_bottleneck_size,
+            norm_outputs=True,
         )
-        self.teacher_head.load_state_dict(self.student_head.state_dict())
-        self.teacher_head.requires_grad_(False)
+        self.teacher_projector.load_state_dict(self.student_projector.state_dict())
+        self.teacher_projector.requires_grad_(False)
 
     @torch.no_grad()
     def update_teacher(self):
         for param_s, param_t in zip(self.student.encoder.layers.parameters(), self.teacher_encoder_layers.parameters()):
             param_t.data.mul_(self.ema_decay).add_((1 - self.ema_decay) * param_s.detach().data)
 
-        for param_s, param_t in zip(self.student_head.parameters(), self.teacher_head.parameters()):
+        for param_s, param_t in zip(self.student_projector.parameters(), self.teacher_projector.parameters()):
             param_t.data.mul_(self.ema_decay).add_((1 - self.ema_decay) * param_s.detach().data)
 
     def forward(
@@ -100,16 +108,17 @@ class DINO(nn.Module):
         self.student.feature_projection.train()
         self.student.encoder.layers.train()
         student_hidden_states, padding_mask = self.student_forward(student_input_values, attention_mask)
-        student_logits = self.student_head(student_hidden_states[-1][padding_mask])
+        student_projection = self.student_projector(student_hidden_states[-1][padding_mask])
+        student_prediction = self.student_predictor(student_projection)
 
         # disable dropout
         self.student.feature_projection.eval()
         self.teacher_encoder_layers.eval()
         with torch.no_grad():
             teacher_hidden_states, padding_mask = self.teacher_forward(teacher_input_values, attention_mask)
-            teacher_logits = self.teacher_head(teacher_hidden_states[-1][padding_mask])
+            teacher_projection = self.teacher_projector(teacher_hidden_states[-1][padding_mask])
 
-        return self.loss_fn(student_logits, teacher_logits)
+        return self.loss_fn(student_prediction, teacher_projection)
 
     def student_forward(
         self,
@@ -226,12 +235,12 @@ class DINO(nn.Module):
         self.student.encoder.layers.requires_grad_(True)
 
 
-class DINOForSyllableDiscovery(nn.Module):
+class S5HubertForSyllableDiscovery(nn.Module):
     def __init__(
         self,
-        checkpoint_path="models/dino/checkpoint",
-        quantizer1_path="models/dino/quantizer1.joblib",
-        quantizer2_path="models/dino/quantizer2.npy",
+        checkpoint_path="models/byol/checkpoint",
+        quantizer1_path="models/byol/quantizer1.joblib",
+        quantizer2_path="models/byol/quantizer2.npy",
         segmentation_layer: int = 8,
     ):
         super().__init__()
@@ -251,6 +260,18 @@ class DINOForSyllableDiscovery(nn.Module):
             "quantizer1", torch.from_numpy(joblib.load(quantizer1_path).cluster_centers_) if quantizer1_path else None
         )
         self.register_buffer("quantizer2", torch.from_numpy(np.load(quantizer2_path)) if quantizer2_path else None)
+
+    @classmethod
+    def from_hf_hub(cls) -> "S5HubertForSyllableDiscovery":
+        checkpoint_path = hf_hub_download("ryota-komatsu/speaker_disentangled_hubert", "models/byol/checkpoint")
+        quantizer1_path = hf_hub_download("ryota-komatsu/speaker_disentangled_hubert", "models/byol/quantizer1.joblib")
+        quantizer2_path = hf_hub_download("ryota-komatsu/speaker_disentangled_hubert", "models/byol/quantizer2.npy")
+        return cls(
+            checkpoint_path,
+            quantizer1_path,
+            quantizer2_path,
+            8,
+        )
 
     @torch.inference_mode()
     def get_hidden_states(self, input_values: torch.Tensor) -> np.ndarray:
@@ -281,3 +302,91 @@ class DINOForSyllableDiscovery(nn.Module):
             "frame_similarity": frame_similarity,
             "durations": durations,
         }
+
+
+class S5HubertForSequenceClassification(nn.Module):
+    def __init__(
+        self,
+        model_name_or_path="models/byol/checkpoint",
+        classifier_proj_size: int = 256,
+        num_labels: int = 1251,
+        segmentation_layer: int = 8,
+    ):
+        super().__init__()
+        state_dict = torch.load(model_name_or_path, weights_only=True)["model"]
+        student_state_dict = OrderedDict()
+        for name in state_dict:
+            if name.startswith("student."):
+                student_state_dict[name[8:]] = state_dict[name]
+
+        self.hubert = HubertModel.from_pretrained("facebook/hubert-base-ls960", weights_only=False)
+        self.hubert.load_state_dict(student_state_dict)
+        self.projector = nn.Linear(self.hubert.config.hidden_size, classifier_proj_size)
+        self.classifier = nn.Linear(classifier_proj_size, num_labels, bias=False)
+
+        # Initialize weights and apply final processing
+        self.reset_parameters()
+        self.num_labels = num_labels
+        self.segmentation_layer = segmentation_layer
+
+        self.freeze_base_model()
+        self.hubert.eval()
+
+    def reset_parameters(self):
+        init_module(self.projector)
+        init_module(self.classifier)
+
+    def freeze_base_model(self):
+        """
+        Calling this function will disable the gradient computation for the base model so that its parameters will not
+        be updated during training. Only the classification head will be updated.
+        """
+        self.hubert.requires_grad_(False)
+
+    def forward(
+        self,
+        input_values: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = True,
+        return_dict: Optional[bool] = True,
+        labels: Optional[torch.Tensor] = None,
+    ) -> Union[Tuple, SequenceClassifierOutput]:
+        r"""
+        labels (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
+            Labels for computing the sequence classification/regression loss. Indices should be in `[0, ...,
+            config.num_labels - 1]`. If `config.num_labels == 1` a regression loss is computed (Mean-Square loss), If
+            `config.num_labels > 1` a classification loss is computed (Cross-Entropy).
+        """
+
+        outputs = self.hubert(
+            input_values,
+            attention_mask=attention_mask,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict,
+        )
+
+        hidden_states = outputs[1][self.segmentation_layer]
+
+        hidden_states = self.projector(hidden_states)
+        if attention_mask is None:
+            pooled_output = hidden_states.mean(dim=1)
+        else:
+            padding_mask = self.hubert._get_feature_vector_attention_mask(hidden_states.shape[1], attention_mask)
+            hidden_states[~padding_mask] = 0.0
+            pooled_output = hidden_states.sum(dim=1) / padding_mask.sum(dim=1).view(-1, 1)
+
+        logits = self.classifier(pooled_output)
+
+        loss = None
+        if labels is not None:
+            loss_fct = nn.CrossEntropyLoss()
+            loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+
+        return SequenceClassifierOutput(
+            loss=loss,
+            logits=logits,
+            hidden_states=outputs.hidden_states,
+            attentions=outputs.attentions,
+        )

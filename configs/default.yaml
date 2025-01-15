@@ -25,7 +25,7 @@ dataloader:
   num_workers: 30
 
 model:
-  model_type: "byol"
+  model_type: "s5hubert"
   model_name_or_path: "facebook/hubert-base-ls960"
   init_last_layer: 3
   head_out_size: 256

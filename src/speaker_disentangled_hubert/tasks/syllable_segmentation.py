@@ -5,15 +5,15 @@ import torchaudio
 from tqdm import tqdm
 
 from ..mincut.mincut_utils import parallel_mincut
-from ..models.byol import BYOLForSyllableDiscovery
-from ..models.dino import DINOForSyllableDiscovery
 from ..models.hubert import HubertForSyllableDiscovery
+from ..models.s5hubert import S5HubertForSyllableDiscovery
+from ..models.s5hubert_dino import S5HubertDinoForSyllableDiscovery
 from ..models.vghubert import VGHubertForSyllableDiscovery
 
 MODELS = {
-    "byol": BYOLForSyllableDiscovery,
-    "dino": DINOForSyllableDiscovery,
     "hubert": HubertForSyllableDiscovery,
+    "s5hubert": S5HubertForSyllableDiscovery,
+    "s5hubert_dino": S5HubertDinoForSyllableDiscovery,
     "vghubert": VGHubertForSyllableDiscovery,
 }
 

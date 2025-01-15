@@ -5,16 +5,16 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from ..models.byol import BYOLForSequenceClassification
 from ..models.hubert import HubertForSequenceClassification
+from ..models.s5hubert import S5HubertForSequenceClassification
 from ..models.sdhubert import SDHubertForSequenceClassification
 from ..models.vghubert import VGHubertForSequenceClassification
 from ..utils.data import VoxCeleb
 from ..utils.misc import fix_random_seed
 
 MODELS = {
-    "byol": BYOLForSequenceClassification,
     "hubert": HubertForSequenceClassification,
+    "s5hubert": S5HubertForSequenceClassification,
     "sdhubert": SDHubertForSequenceClassification,
     "vghubert": VGHubertForSequenceClassification,
 }

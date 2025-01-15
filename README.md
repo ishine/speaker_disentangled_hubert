@@ -4,7 +4,7 @@
 [![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10-blue.svg)](https://www.python.org)
 [![colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ryota-komatsu/speaker_disentangled_hubert/blob/main/demo.ipynb)
 [![arXiv](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://arxiv.org/abs/2409.10103)
-[![model](https://img.shields.io/badge/%F0%9F%A4%97-Models-blue)](https://huggingface.co/ryota-komatsu/speaker_disentangled_hubert)
+[![model](https://img.shields.io/badge/%F0%9F%A4%97-Models-blue)](https://huggingface.co/ryota-komatsu/s5-hubert)
 
 This is the official repository of the IEEE SLT 2024 paper [Self-Supervised Syllable Discovery Based on Speaker-Disentangled HuBERT](https://arxiv.org/abs/2409.10103).
 
@@ -30,7 +30,7 @@ from src.speaker_disentangled_hubert import S5HubertForSyllableDiscovery
 wav_path = "/path/to/wav"
 
 # download a pretrained model from hugging face hub
-model = S5HubertForSyllableDiscovery.from_hf_hub().cuda()
+model = S5HubertForSyllableDiscovery.from_pretrained("ryota-komatsu/s5-hubert").cuda()
 
 # load a waveform
 waveform, sr = torchaudio.load(wav_path)
@@ -51,14 +51,9 @@ Google Colab demo is found [here](https://colab.research.google.com/github/ryota
 
 ![](figures/model.png)
 
-Download models from the following links.
-| Model                       | Link                                                                                                                    |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| S5-HuBERT                   | [download](https://huggingface.co/ryota-komatsu/speaker_disentangled_hubert/resolve/main/models/byol/checkpoint)        |
-| KMeans                      | [download](https://huggingface.co/ryota-komatsu/speaker_disentangled_hubert/resolve/main/models/byol/quantizer1.joblib) |
-| Agglomerative clustering    | [download](https://huggingface.co/ryota-komatsu/speaker_disentangled_hubert/resolve/main/models/byol/quantizer2.npy)    |
+You can download a pretrained model from [Hugging Face](https://huggingface.co/ryota-komatsu/s5-hubert).
 
-Other models can be downloaded from [Hugging Face](https://huggingface.co/ryota-komatsu/speaker_disentangled_hubert/tree/main).
+Other models can be downloaded from [the old repository](https://huggingface.co/ryota-komatsu/speaker_disentangled_hubert/tree/main).
 
 ## Data Preparation
 

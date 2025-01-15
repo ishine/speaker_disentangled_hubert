@@ -7,19 +7,21 @@ from tqdm import tqdm
 from ..mincut.mincut_utils import parallel_mincut
 from ..models.hubert import HubertForSyllableDiscovery
 from ..models.s5hubert import S5HubertForSyllableDiscovery
-from ..models.s5hubert_dino import S5HubertDinoForSyllableDiscovery
 from ..models.vghubert import VGHubertForSyllableDiscovery
 
 MODELS = {
     "hubert": HubertForSyllableDiscovery,
-    "s5hubert": S5HubertForSyllableDiscovery,
-    "s5hubert_dino": S5HubertDinoForSyllableDiscovery,
     "vghubert": VGHubertForSyllableDiscovery,
 }
 
 
 def syllable_segmentation(config):
-    if config.model.model_type in MODELS:
+    if config.model.model_type.startswith("s5hubert"):
+        model = S5HubertForSyllableDiscovery.from_pretrained(
+            config.path.checkpoint,
+            segmentation_layer=config.model.segmentation_layer,
+        )
+    elif config.model.model_type in MODELS:
         model = MODELS[config.model.model_type](
             checkpoint_path=config.path.checkpoint,
             quantizer1_path=None,
@@ -46,7 +48,8 @@ def syllable_segmentation(config):
                 wav, sr = torchaudio.load(wav_path)
                 wav = wav.cuda()
 
-                outputs = model(wav)
+                hidden_states = model.get_hidden_states(wav)
+                outputs = {"hidden_states": hidden_states}
 
                 # save hidden states
                 segment_name = wav_name.replace(".flac", ".npy")

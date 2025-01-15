@@ -4,11 +4,11 @@ common:
   seed: 0
 
 path:
-  checkpoint: "models/dino/checkpoint"
-  quantizer1: "models/dino/quantizer1.joblib"
-  quantizer2: "models/dino/quantizer2.npy"
-  segment_dir: "segments/dino"
-  result: "results/dino.json"
+  checkpoint: "models/s5-hubert-dino"
+  quantizer1: "models/s5-hubert-dino/quantizer1.joblib"
+  quantizer2: "models/s5-hubert-dino/quantizer2.npy"
+  segment_dir: "segments/s5-hubert-dino"
+  result: "results/s5-hubert-dino.json"
 
 dataset:
   root: "data" # ${root}/LibriSpeech/train-clean-100, train-clean-360, ...

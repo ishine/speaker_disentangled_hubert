@@ -155,13 +155,14 @@ def train(config):
                 model.defrost_transformer_encoder()
 
         # save model
-        ckpt = {
-            "epoch": epoch,
-            "step": step,
-            "model": model.state_dict(),
-            "optimizer": optimizer.state_dict(),
-            "scheduler": lr_scheduler.state_dict(),
-            "scaler": scaler.state_dict(),
-        }
+        # ckpt = {
+        #     "epoch": epoch,
+        #     "step": step,
+        #     "model": model.state_dict(),
+        #     "optimizer": optimizer.state_dict(),
+        #     "scheduler": lr_scheduler.state_dict(),
+        #     "scaler": scaler.state_dict(),
+        # }
         Path(config.path.checkpoint).parent.mkdir(parents=True, exist_ok=True)
-        torch.save(ckpt, config.path.checkpoint)
+        model.student.save_pretrained(config.path.checkpoint)
+        # torch.save(ckpt, config.path.checkpoint)

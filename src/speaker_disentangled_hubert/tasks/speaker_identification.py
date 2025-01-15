@@ -36,7 +36,7 @@ def evaluate(config, data_loader, model, writer: Optional[SummaryWriter] = None,
 
     accuracy = accuracy / len(data_loader)
     if writer:
-        writer.add_scalar(f"dev/accuracy", accuracy, epoch)
+        writer.add_scalar("dev/accuracy", accuracy, epoch)
     return accuracy
 
 

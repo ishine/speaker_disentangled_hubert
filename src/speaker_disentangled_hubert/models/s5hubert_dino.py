@@ -15,16 +15,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections import OrderedDict
-from typing import Dict, Optional, Tuple
+from typing import Optional, Tuple
 
-import joblib
-import numpy as np
 import torch
 from torch import nn
 from transformers.models.hubert.modeling_hubert import HubertEncoderLayer, HubertModel
 
-from ..mincut.mincut_utils import min_cut
 from .modules import DINOHead, DINOLoss, init_module
 
 
@@ -224,60 +220,3 @@ class S5HubertDino(nn.Module):
         self.student.encoder.pos_conv_embed.requires_grad_(False)
         self.student.encoder.layer_norm.requires_grad_(False)
         self.student.encoder.layers.requires_grad_(True)
-
-
-class S5HubertDinoForSyllableDiscovery(nn.Module):
-    def __init__(
-        self,
-        checkpoint_path="models/dino/checkpoint",
-        quantizer1_path="models/dino/quantizer1.joblib",
-        quantizer2_path="models/dino/quantizer2.npy",
-        segmentation_layer: int = 8,
-    ):
-        super().__init__()
-        self.segmentation_layer = segmentation_layer
-
-        state_dict = torch.load(checkpoint_path, weights_only=True)["model"]
-        student_state_dict = OrderedDict()
-        for name in state_dict:
-            if name.startswith("student."):
-                student_state_dict[name[8:]] = state_dict[name]
-
-        self.model = HubertModel.from_pretrained("facebook/hubert-base-ls960", weights_only=False)
-        self.model.load_state_dict(student_state_dict)
-        self.model.eval()
-
-        self.register_buffer(
-            "quantizer1", torch.from_numpy(joblib.load(quantizer1_path).cluster_centers_) if quantizer1_path else None
-        )
-        self.register_buffer("quantizer2", torch.from_numpy(np.load(quantizer2_path)) if quantizer2_path else None)
-
-    @torch.inference_mode()
-    def get_hidden_states(self, input_values: torch.Tensor) -> np.ndarray:
-        hidden_states = self.model(input_values, output_hidden_states=True).hidden_states
-        return hidden_states[self.segmentation_layer].squeeze(0).cpu().numpy()
-
-    def forward(self, input_values: torch.Tensor) -> Dict[str, np.ndarray]:
-        hidden_states = self.get_hidden_states(input_values)
-        if self.quantizer1 is None or self.quantizer2 is None:
-            return {"hidden_states": hidden_states}
-
-        frame_similarity = hidden_states @ hidden_states.T
-        boundary, segment_features, frame_boundary = min_cut(hidden_states)
-
-        # deduplicated syllabic units
-        units = torch.cdist(torch.from_numpy(segment_features).to(self.quantizer1.device), self.quantizer1).argmin(1)
-        units = self.quantizer2[units].cpu().numpy()
-
-        # duplicated syllabic units
-        durations = frame_boundary[:, 1] - frame_boundary[:, 0]
-        duplicated_units = np.repeat(units, durations)
-        return {
-            "units": units,
-            "duplicated_units": duplicated_units,
-            "boundary": boundary,
-            "frame_boundary": frame_boundary,
-            "hidden_states": hidden_states,
-            "frame_similarity": frame_similarity,
-            "durations": durations,
-        }

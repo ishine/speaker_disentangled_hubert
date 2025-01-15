@@ -4,7 +4,7 @@ common:
   seed: 0
 
 path:
-  checkpoint: "models/byol/checkpoint_sid"
+  checkpoint: "models/s5-hubert/checkpoint_sid"
 
 dataset:
   root: "data/VoxCeleb1"
@@ -17,7 +17,7 @@ dataloader:
 
 model:
   model_type: "s5hubert"
-  model_name_or_path: "models/byol/checkpoint"
+  model_name_or_path: "models/s5-hubert"
   classifier_proj_size: 256
   num_labels: 1251 # VoxCeleb1
   segmentation_layer: 8

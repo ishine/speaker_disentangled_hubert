@@ -4,11 +4,11 @@ common:
   seed: 0
 
 path:
-  checkpoint: "models/byol/checkpoint"
-  quantizer1: "models/byol/quantizer1.joblib"
-  quantizer2: "models/byol/quantizer2.npy"
-  segment_dir: "segments/byol"
-  result: "results/byol.json"
+  checkpoint: "models/s5-hubert"
+  quantizer1: "models/s5-hubert/quantizer1.joblib"
+  quantizer2: "models/s5-hubert/quantizer2.npy"
+  segment_dir: "segments/s5-hubert"
+  result: "results/s5-hubert.json"
 
 dataset:
   root: "data" # ${root}/LibriSpeech/train-clean-100, train-clean-360, ...

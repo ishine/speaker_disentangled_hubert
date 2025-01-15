@@ -15,16 +15,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections import OrderedDict
 from typing import Dict, Optional, Tuple, Union
 
-import joblib
 import numpy as np
 import torch
-from huggingface_hub import hf_hub_download
+from sklearn.cluster import AgglomerativeClustering, MiniBatchKMeans
 from torch import nn
 from transformers.modeling_outputs import SequenceClassifierOutput
-from transformers.models.hubert.modeling_hubert import HubertEncoderLayer, HubertModel
+from transformers.models.hubert.modeling_hubert import HubertEncoderLayer, HubertModel, HubertPreTrainedModel
 
 from ..mincut.mincut_utils import min_cut
 from .modules import MLP, init_module
@@ -235,53 +233,61 @@ class S5Hubert(nn.Module):
         self.student.encoder.layers.requires_grad_(True)
 
 
-class S5HubertForSyllableDiscovery(nn.Module):
+class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
     def __init__(
         self,
-        checkpoint_path="models/byol/checkpoint",
-        quantizer1_path="models/byol/quantizer1.joblib",
-        quantizer2_path="models/byol/quantizer2.npy",
+        config,
         segmentation_layer: int = 8,
+        n_units_step1: int = 16384,
+        n_units_step2: int = 4096,
     ):
-        super().__init__()
+        super().__init__(config)
         self.segmentation_layer = segmentation_layer
+        self.n_units_step1 = n_units_step1
+        self.n_units_step2 = n_units_step2
 
-        state_dict = torch.load(checkpoint_path, weights_only=True)["model"]
-        student_state_dict = OrderedDict()
-        for name in state_dict:
-            if name.startswith("student."):
-                student_state_dict[name[8:]] = state_dict[name]
+        self.hubert = HubertModel(config)
+        self.hubert.eval()
 
-        self.model = HubertModel.from_pretrained("facebook/hubert-base-ls960", weights_only=False)
-        self.model.load_state_dict(student_state_dict)
-        self.model.eval()
+        self.register_buffer("quantizer1", torch.rand(n_units_step1, config.hidden_size))
+        self.register_buffer("quantizer2", torch.zeros(n_units_step1, dtype=torch.int))
 
-        self.register_buffer(
-            "quantizer1", torch.from_numpy(joblib.load(quantizer1_path).cluster_centers_) if quantizer1_path else None
+    def train_quantizer(
+        self,
+        hidden_states: np.ndarray,
+        batch_size: int = 10000,
+        verbose: int = 1,
+        compute_labels: bool = False,
+        random_state=0,
+        max_no_improvement: int = 100,
+        n_init: int = 5,
+        reassignment_ratio: float = 0.0,
+    ):
+        quantizer1 = MiniBatchKMeans(
+            n_clusters=self.n_units_step1,
+            batch_size=batch_size,
+            verbose=verbose,
+            compute_labels=compute_labels,
+            random_state=random_state,
+            max_no_improvement=max_no_improvement,
+            n_init=n_init,
+            reassignment_ratio=reassignment_ratio,
         )
-        self.register_buffer("quantizer2", torch.from_numpy(np.load(quantizer2_path)) if quantizer2_path else None)
+        quantizer1.fit(hidden_states)
 
-    @classmethod
-    def from_hf_hub(cls) -> "S5HubertForSyllableDiscovery":
-        checkpoint_path = hf_hub_download("ryota-komatsu/speaker_disentangled_hubert", "models/byol/checkpoint")
-        quantizer1_path = hf_hub_download("ryota-komatsu/speaker_disentangled_hubert", "models/byol/quantizer1.joblib")
-        quantizer2_path = hf_hub_download("ryota-komatsu/speaker_disentangled_hubert", "models/byol/quantizer2.npy")
-        return cls(
-            checkpoint_path,
-            quantizer1_path,
-            quantizer2_path,
-            8,
-        )
+        quantizer2 = AgglomerativeClustering(self.n_units_step2)
+        quantizer2.fit_predict(quantizer1.cluster_centers_)
+
+        self.quantizer1 = torch.from_numpy(quantizer1.cluster_centers_)
+        self.quantizer2 = torch.from_numpy(quantizer2)
 
     @torch.inference_mode()
     def get_hidden_states(self, input_values: torch.Tensor) -> np.ndarray:
-        hidden_states = self.model(input_values, output_hidden_states=True).hidden_states
+        hidden_states = self.hubert(input_values, output_hidden_states=True).hidden_states
         return hidden_states[self.segmentation_layer].squeeze(0).cpu().numpy()
 
     def forward(self, input_values: torch.Tensor) -> Dict[str, np.ndarray]:
         hidden_states = self.get_hidden_states(input_values)
-        if self.quantizer1 is None or self.quantizer2 is None:
-            return {"hidden_states": hidden_states}
 
         frame_similarity = hidden_states @ hidden_states.T
         boundary, segment_features, frame_boundary = min_cut(hidden_states)
@@ -307,20 +313,14 @@ class S5HubertForSyllableDiscovery(nn.Module):
 class S5HubertForSequenceClassification(nn.Module):
     def __init__(
         self,
-        model_name_or_path="models/byol/checkpoint",
+        model_name_or_path="models/s5-hubert",
         classifier_proj_size: int = 256,
         num_labels: int = 1251,
         segmentation_layer: int = 8,
     ):
         super().__init__()
-        state_dict = torch.load(model_name_or_path, weights_only=True)["model"]
-        student_state_dict = OrderedDict()
-        for name in state_dict:
-            if name.startswith("student."):
-                student_state_dict[name[8:]] = state_dict[name]
 
-        self.hubert = HubertModel.from_pretrained("facebook/hubert-base-ls960", weights_only=False)
-        self.hubert.load_state_dict(student_state_dict)
+        self.hubert = HubertModel.from_pretrained(model_name_or_path)
         self.projector = nn.Linear(self.hubert.config.hidden_size, classifier_proj_size)
         self.classifier = nn.Linear(classifier_proj_size, num_labels, bias=False)
 

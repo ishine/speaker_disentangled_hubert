@@ -25,7 +25,7 @@ sh scripts/setup.sh
 ```python
 import torchaudio
 
-from src.speaker_disentangled_hubert import S5HubertForSyllableDiscovery
+from src.s5hubert import S5HubertForSyllableDiscovery
 
 wav_path = "/path/to/wav"
 

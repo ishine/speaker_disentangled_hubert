@@ -286,11 +286,24 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         hidden_states = self.hubert(input_values, output_hidden_states=True).hidden_states
         return hidden_states[self.segmentation_layer].squeeze(0).cpu().numpy()
 
-    def forward(self, input_values: torch.Tensor) -> Dict[str, np.ndarray]:
+    def forward(
+        self,
+        input_values: torch.Tensor,
+        sec_per_frame: float = 0.02,
+        sec_per_syllable: float = 0.2,
+        merge_threshold: Optional[float] = 0.3,
+        max_frames: int = 50,
+    ) -> Dict[str, np.ndarray]:
         hidden_states = self.get_hidden_states(input_values)
 
         frame_similarity = hidden_states @ hidden_states.T
-        boundary, segment_features, frame_boundary = min_cut(hidden_states)
+        boundary, segment_features, frame_boundary = min_cut(
+            hidden_states,
+            sec_per_frame=sec_per_frame,
+            sec_per_syllable=sec_per_syllable,
+            merge_threshold=merge_threshold,
+            max_frames=max_frames,
+        )
 
         # deduplicated syllabic units
         units = torch.cdist(torch.from_numpy(segment_features).to(self.quantizer1.device), self.quantizer1).argmin(1)

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-cd src/speaker_disentangled_hubert/mincut
+cd src/s5hubert/mincut
 python setup.py build_ext --inplace
 cd -
 

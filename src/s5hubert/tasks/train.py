@@ -94,18 +94,18 @@ def train(config):
     step = 0
 
     # resume training
-    if Path(config.path.checkpoint).is_file():
-        ckpt = torch.load(config.path.checkpoint, weights_only=True)
+    # if Path(config.path.checkpoint).is_file():
+    #     ckpt = torch.load(config.path.checkpoint, weights_only=True)
 
-        last_epoch = ckpt["epoch"]
-        step = ckpt["step"]
-        model.load_state_dict(ckpt["model"])
-        optimizer.load_state_dict(ckpt["optimizer"])
-        lr_scheduler.load_state_dict(ckpt["scheduler"])
-        scaler.load_state_dict(ckpt["scaler"])
+    #     last_epoch = ckpt["epoch"]
+    #     step = ckpt["step"]
+    #     model.load_state_dict(ckpt["model"])
+    #     optimizer.load_state_dict(ckpt["optimizer"])
+    #     lr_scheduler.load_state_dict(ckpt["scheduler"])
+    #     scaler.load_state_dict(ckpt["scaler"])
 
-        print(f"load from {config.path.checkpoint}")
-        del ckpt
+    #     print(f"load from {config.path.checkpoint}")
+    #     del ckpt
 
     if step < warmup_steps:
         model.freeze_pretrained_modules()

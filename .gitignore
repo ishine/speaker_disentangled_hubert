@@ -1,7 +1,7 @@
 .vscode
 __pycache__
-src/speaker_disentangled_hubert/mincut/build
-src/speaker_disentangled_hubert/mincut/mincut.c*
+src/s5hubert/mincut/build
+src/s5hubert/mincut/mincut.c*
 src/sdhubert
 src/vghubert
 results

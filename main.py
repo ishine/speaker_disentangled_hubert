@@ -2,10 +2,10 @@ import argparse
 
 from omegaconf import OmegaConf
 
-from src.speaker_disentangled_hubert.tasks.clustering import clustering
-from src.speaker_disentangled_hubert.tasks.eval import evaluate
-from src.speaker_disentangled_hubert.tasks.syllable_segmentation import syllable_segmentation
-from src.speaker_disentangled_hubert.tasks.train import train
+from src.s5hubert.tasks.clustering import clustering
+from src.s5hubert.tasks.eval import evaluate
+from src.s5hubert.tasks.syllable_segmentation import syllable_segmentation
+from src.s5hubert.tasks.train import train
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -27,6 +27,7 @@ from transformers.modeling_outputs import SequenceClassifierOutput
 
 from ...vghubert.models import audio_encoder
 from ..mincut.mincut_utils import min_cut
+from ..utils.misc import fix_random_seed
 from .modules import init_module
 
 
@@ -50,19 +51,22 @@ class VGHubertForSyllableDiscovery(nn.Module):
         quantizer1_path="models/vg-hubert_3/quantizer1.joblib",
         quantizer2_path="models/vg-hubert_3/quantizer2.npy",
         segmentation_layer: int = 8,
+        seed: int = 0,
     ):
         super().__init__()
         self.segmentation_layer = segmentation_layer
-        self.model = load_vghubert(checkpoint_path)
+        self.hubert = load_vghubert(checkpoint_path)
 
         self.register_buffer(
             "quantizer1", torch.from_numpy(joblib.load(quantizer1_path).cluster_centers_) if quantizer1_path else None
         )
         self.register_buffer("quantizer2", torch.from_numpy(np.load(quantizer2_path)) if quantizer2_path else None)
 
+        fix_random_seed(seed)
+
     @torch.inference_mode()
     def get_hidden_states(self, input_values: torch.Tensor) -> np.ndarray:
-        hidden_states = self.model(
+        hidden_states = self.hubert(
             input_values,
             padding_mask=None,
             mask=False,

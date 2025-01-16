@@ -25,6 +25,7 @@ from transformers.modeling_outputs import SequenceClassifierOutput
 from transformers.models.hubert.modeling_hubert import HubertEncoderLayer, HubertModel, HubertPreTrainedModel
 
 from ..mincut.mincut_utils import min_cut
+from ..utils.misc import fix_random_seed
 from .modules import MLP, init_module
 
 
@@ -240,6 +241,7 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         segmentation_layer: int = 8,
         n_units_step1: int = 16384,
         n_units_step2: int = 4096,
+        seed: int = 0,
     ):
         super().__init__(config)
         self.segmentation_layer = segmentation_layer
@@ -251,6 +253,8 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
 
         self.register_buffer("quantizer1", torch.rand(n_units_step1, config.hidden_size))
         self.register_buffer("quantizer2", torch.zeros(n_units_step1, dtype=torch.int))
+
+        fix_random_seed(seed)
 
     def train_quantizer(
         self,

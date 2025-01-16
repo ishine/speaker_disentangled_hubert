@@ -26,6 +26,7 @@ from transformers.modeling_outputs import SequenceClassifierOutput
 from transformers.models.hubert.modeling_hubert import HubertModel
 
 from ..mincut.mincut_utils import min_cut
+from ..utils.misc import fix_random_seed
 from .modules import init_module
 
 
@@ -36,26 +37,29 @@ class HubertForSyllableDiscovery(nn.Module):
         quantizer1_path="models/hubert/quantizer1.joblib",
         quantizer2_path="models/hubert/quantizer2.npy",
         segmentation_layer: int = 8,
+        seed: int = 0,
     ):
         super().__init__()
         self.segmentation_layer = segmentation_layer
 
         self.processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base-960h")
 
-        self.model = HubertModel.from_pretrained(checkpoint_path, weights_only=False)
-        self.model.eval()
+        self.hubert = HubertModel.from_pretrained(checkpoint_path, weights_only=False)
+        self.hubert.eval()
 
         self.register_buffer(
             "quantizer1", torch.from_numpy(joblib.load(quantizer1_path).cluster_centers_) if quantizer1_path else None
         )
         self.register_buffer("quantizer2", torch.from_numpy(np.load(quantizer2_path)) if quantizer2_path else None)
 
+        fix_random_seed(seed)
+
     @torch.inference_mode()
     def get_hidden_states(self, input_values: torch.Tensor) -> np.ndarray:
         input_values = input_values.cpu().numpy()
         input_values = self.processor(input_values, sampling_rate=16000, return_tensors="pt").input_values
-        input_values = input_values.to(self.model.device)
-        hidden_states = self.model(input_values, output_hidden_states=True).hidden_states
+        input_values = input_values.to(self.hubert.device)
+        hidden_states = self.hubert(input_values, output_hidden_states=True).hidden_states
         return hidden_states[self.segmentation_layer].squeeze(0).cpu().numpy()
 
     def forward(self, input_values: torch.Tensor) -> Dict[str, np.ndarray]:

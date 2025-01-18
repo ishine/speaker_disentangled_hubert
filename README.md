@@ -99,6 +99,7 @@ python main.py --config configs/default.yaml
   year      = {2024},
   month     = {Dec.},
   booktitle = {IEEE Spoken Language Technology Workshop},
-  pages     = {},
+  pages     = {1131--1136},
+  doi       = {10.1109/SLT61566.2024.10832325},
 }
 ```

@@ -60,7 +60,7 @@ def analyze_sdhubert(config):
     coocurrence_mat = torch.zeros(len(spk_list), 2048)
 
     for batch in tqdm(test_loader):
-        waveform = batch["waveform"]
+        waveform = batch["teacher_input_values"]
         spk_id = batch["spk_id"][0]
 
         waveform = processor(waveform.numpy(), sampling_rate=16000, return_tensors="pt").input_values

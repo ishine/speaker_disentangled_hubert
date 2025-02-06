@@ -101,21 +101,24 @@ class S5Hubert(nn.Module):
         self,
         teacher_input_values: torch.Tensor,
         student_input_values: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
+        teacher_attention_mask: Optional[torch.Tensor] = None,
+        student_attention_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         # enable dropout
         self.student.feature_projection.train()
         self.student.encoder.layers.train()
-        student_hidden_states, padding_mask = self.student_forward(student_input_values, attention_mask)
-        student_projection = self.student_projector(student_hidden_states[-1][padding_mask])
+        student_hidden_states, student_padding_mask = self.student_forward(student_input_values, student_attention_mask)
+        student_projection = self.student_projector(student_hidden_states[-1][student_padding_mask])
         student_prediction = self.student_predictor(student_projection)
 
         # disable dropout
         self.student.feature_projection.eval()
         self.teacher_encoder_layers.eval()
         with torch.no_grad():
-            teacher_hidden_states, padding_mask = self.teacher_forward(teacher_input_values, attention_mask)
-            teacher_projection = self.teacher_projector(teacher_hidden_states[-1][padding_mask])
+            teacher_hidden_states, teacher_padding_mask = self.teacher_forward(
+                teacher_input_values, teacher_attention_mask
+            )
+            teacher_projection = self.teacher_projector(teacher_hidden_states[-1][teacher_padding_mask])
 
         return self.loss_fn(student_prediction, teacher_projection)
 

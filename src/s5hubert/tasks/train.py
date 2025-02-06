@@ -41,6 +41,7 @@ def train(config):
         batch_size=config.dataloader.batch_size,
         shuffle=True,
         num_workers=config.dataloader.num_workers,
+        collate_fn=LibriSpeech.collate_fn,
     )
 
     if config.model.model_type == "s5hubert":
@@ -118,9 +119,10 @@ def train(config):
         for batch in tqdm(train_loader, desc=f"epoch {epoch}", disable=config.common.disable_tqdm):
             with torch.amp.autocast("cuda", enabled=config.common.fp16):
                 loss = model(
-                    teacher_input_values=batch["waveform"].cuda(),
-                    student_input_values=batch["perturbed_waveform"].cuda(),
-                    attention_mask=batch["attention_mask"].cuda(),
+                    teacher_input_values=batch["teacher_input_values"].cuda(),
+                    student_input_values=batch["student_input_values"].cuda(),
+                    teacher_attention_mask=batch["teacher_attention_mask"].cuda(),
+                    student_attention_mask=batch["student_attention_mask"].cuda(),
                 )
             scaler.scale(loss).backward()
 

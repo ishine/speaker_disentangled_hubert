@@ -20,7 +20,7 @@ def syllable_segmentation(config):
         model = S5HubertForSyllableDiscovery.from_pretrained(
             config.path.checkpoint,
             segmentation_layer=config.model.segmentation_layer,
-        )
+        ).cuda()
     elif config.model.model_type in MODELS:
         model = MODELS[config.model.model_type](
             checkpoint_path=config.path.checkpoint,
@@ -45,6 +45,7 @@ def syllable_segmentation(config):
             for wav_name in tqdm(f, disable=config.common.disable_tqdm):
                 wav_name = wav_name.rstrip()
                 wav_path = wav_dir / wav_name
+                wav_path = str(wav_path)  # for sox backend
                 wav, sr = torchaudio.load(wav_path)
                 wav = wav.cuda()
 

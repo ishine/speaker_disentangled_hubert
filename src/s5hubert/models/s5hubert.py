@@ -24,7 +24,7 @@ from torch import nn
 from transformers.modeling_outputs import SequenceClassifierOutput
 from transformers.models.hubert.modeling_hubert import HubertEncoderLayer, HubertModel, HubertPreTrainedModel
 
-from ..mincut.mincut_utils import min_cut
+from ..mincut.mincut_utils import mincut_torch
 from ..utils.misc import fix_random_seed
 from .modules import MLP, init_module
 
@@ -289,9 +289,9 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         self.quantizer2 = torch.from_numpy(quantizer2)
 
     @torch.inference_mode()
-    def get_hidden_states(self, input_values: torch.Tensor) -> np.ndarray:
+    def get_hidden_states(self, input_values: torch.Tensor) -> torch.Tensor:
         hidden_states = self.hubert(input_values, output_hidden_states=True).hidden_states
-        return hidden_states[self.segmentation_layer].squeeze(0).cpu().numpy()
+        return hidden_states[self.segmentation_layer].squeeze(0)
 
     def forward(
         self,
@@ -299,28 +299,29 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         sec_per_frame: float = 0.02,
         sec_per_syllable: float = 0.2,
         merge_threshold: Optional[float] = 0.3,
-        max_frames: int = 50,
-    ) -> Dict[str, np.ndarray]:
+        max_duration: int = 50,
+    ) -> Dict[str, torch.Tensor]:
         hidden_states = self.get_hidden_states(input_values)
 
         frame_similarity = hidden_states @ hidden_states.T
-        boundary, segment_features, frame_boundary = min_cut(
+        boundary, segment_features, frame_boundary = mincut_torch(
             hidden_states,
             sec_per_frame=sec_per_frame,
             sec_per_syllable=sec_per_syllable,
             merge_threshold=merge_threshold,
-            max_frames=max_frames,
+            max_duration=max_duration,
         )
 
         # deduplicated syllabic units
-        units = torch.cdist(torch.from_numpy(segment_features).to(self.quantizer1.device), self.quantizer1).argmin(1)
-        units = self.quantizer2[units].cpu().numpy()
+        units_step1 = torch.cdist(segment_features, self.quantizer1).argmin(1)
+        units = self.quantizer2[units_step1]
 
         # duplicated syllabic units
         durations = frame_boundary[:, 1] - frame_boundary[:, 0]
-        duplicated_units = np.repeat(units, durations)
+        duplicated_units = torch.repeat_interleave(units, durations)
         return {
             "units": units,
+            "units_step1": units_step1,
             "duplicated_units": duplicated_units,
             "boundary": boundary,
             "frame_boundary": frame_boundary,

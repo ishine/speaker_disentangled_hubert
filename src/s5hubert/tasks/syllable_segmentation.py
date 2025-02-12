@@ -49,7 +49,7 @@ def syllable_segmentation(config):
                 wav, sr = torchaudio.load(wav_path)
                 wav = wav.cuda()
 
-                hidden_states = model.get_hidden_states(wav)
+                hidden_states = model.get_hidden_states(wav).cpu().numpy()
                 outputs = {"hidden_states": hidden_states}
 
                 # save hidden states

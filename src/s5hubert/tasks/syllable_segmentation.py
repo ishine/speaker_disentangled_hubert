@@ -42,7 +42,8 @@ def syllable_segmentation(config):
 
     for file in files:
         with open(file) as f:
-            for wav_name in tqdm(f, disable=config.common.disable_tqdm):
+            lines = f.readlines()
+            for wav_name in tqdm(lines, disable=config.common.disable_tqdm):
                 wav_name = wav_name.rstrip()
                 wav_path = wav_dir / wav_name
                 wav_path = str(wav_path)  # for sox backend

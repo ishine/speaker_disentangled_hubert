@@ -6,18 +6,16 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from . import mincut
 
-
-def mincut_dp(W: torch.Tensor, num_syllables: int, max_duration: int = 50):
+def mincut_dp_torch(W: torch.Tensor, num_syllables: int, max_duration: int = 50):
     """
     Args:
         W (`torch.FloatTensor` of shape `(sequence_length, sequence_length)`):
             Self-similarity matrix.
     """
-    T = W.size(0)
+    T = W.shape[0]
 
-    W_pad = torch.zeros(T + 1, T + 1, dtype=W.dtype, device=W.device)
+    W_pad = torch.zeros((T + 1, T + 1), dtype=W.dtype, device=W.device)
     W_pad[1:, 1:] = W
     W = W_pad
 
@@ -25,7 +23,7 @@ def mincut_dp(W: torch.Tensor, num_syllables: int, max_duration: int = 50):
     V = W_cumsum[-1]  # (T + 1,)
 
     # vol[i, j] = W[i : j + 1].sum()
-    vol = V[1:].unsqueeze(0) - V[:-1].unsqueeze(1)  # (T, T)
+    vol = V[1:][None, :] - V[:-1][:, None]  # (T, T)
 
     arange = torch.arange(T, device=W.device)
     i, j = torch.meshgrid(arange, arange + 1, indexing="ij")
@@ -76,7 +74,7 @@ def mincut_torch(
 
     ssm = hidden_states @ hidden_states.T
     ssm = ssm - torch.min(ssm) + 1e-7  # make it non-negative
-    seg_boundary_frame = mincut_dp(ssm, num_syllables, max_duration)
+    seg_boundary_frame = mincut_dp_torch(ssm, num_syllables, max_duration)
 
     seg_boundary_frame_pairs = [[l, r] for l, r in zip(seg_boundary_frame[:-1], seg_boundary_frame[1:])]
     pooled_feat = torch.stack([hidden_states[l:r].mean(0) for l, r in seg_boundary_frame_pairs])
@@ -98,7 +96,57 @@ def mincut_torch(
     return boundaries, pooled_feat, torch.tensor(seg_boundary_frame_pairs, device=hidden_states.device)
 
 
-def min_cut(
+def mincut_dp_numpy(W: np.ndarray, num_syllables: int, max_duration: int = 50):
+    """
+    Args:
+        W (`torch.FloatTensor` of shape `(sequence_length, sequence_length)`):
+            Self-similarity matrix.
+    """
+    T = W.shape[0]
+
+    W_pad = np.zeros((T + 1, T + 1), dtype=W.dtype)
+    W_pad[1:, 1:] = W
+    W = W_pad
+
+    W_cumsum = W.cumsum(axis=0).cumsum(axis=1)  # (T + 1, T + 1)
+    V = W_cumsum[-1]  # (T + 1,)
+
+    # vol[i, j] = W[i : j + 1].sum()
+    vol = V[1:][None, :] - V[:-1][:, None]  # (T, T)
+
+    arange = np.arange(T)
+    i, j = np.meshgrid(arange, arange + 1, indexing="ij")
+
+    # W_sum[i, j] = W[i : j + 1, i : j + 1].sum()
+    W_sum = W_cumsum[j, j] - 2 * W_cumsum[i, j] + W_cumsum[i, i]
+    cut = vol - W_sum
+    with np.errstate(invalid="ignore"):
+        ncut = cut / (cut + W_sum / 2)
+
+    B = np.zeros((T + 1, num_syllables + 1), dtype=np.int32)
+    C = np.full((T + 1, num_syllables + 1), np.finfo(W.dtype).max)
+    C[0, 0] = 0
+
+    # dynamic programming
+    for t in range(1, T + 1):
+        start = max(0, t - max_duration)
+        s = min(num_syllables, t)
+        c = C[start:t, :s] + ncut[start:t, t - 1 : t]
+        idx = np.argmin(c, axis=0, keepdims=True)
+        B[t, 1 : s + 1] = idx + start
+        C[t, 1 : s + 1] = np.take_along_axis(c, axis=0, indices=idx)
+
+    # backtrack
+    prev_b = T
+    boundary = [prev_b]
+    for k in range(num_syllables, 0, -1):
+        prev_b = B[prev_b, k]
+        boundary.append(prev_b)
+    boundary.reverse()
+    return boundary
+
+
+def mincut_numpy(
     hidden_states: np.ndarray,
     sec_per_frame: float = 0.02,
     sec_per_syllable: float = 0.2,
@@ -112,13 +160,17 @@ def min_cut(
 
     ssm = hidden_states @ hidden_states.T
     ssm = ssm - np.min(ssm) + 1e-7  # make it non-negative
-    seg_boundary_frame = mincut.min_cut(ssm, num_syllable + 1, max_duration)  # +1 for the algo
+    seg_boundary_frame = mincut_dp_numpy(ssm, num_syllable, max_duration)
 
     seg_boundary_frame_pairs = [[l, r] for l, r in zip(seg_boundary_frame[:-1], seg_boundary_frame[1:])]
+    pooled_feat = np.stack([hidden_states[l:r].mean(0) for l, r in seg_boundary_frame_pairs])
 
     if merge_threshold is not None and len(seg_boundary_frame_pairs) >= 3:
-        all_feat = [hidden_states[l:r].mean(0) for l, r in seg_boundary_frame_pairs]
-        all_sim = [np.dot(l, r) / (np.linalg.norm(l) * np.linalg.norm(r)) for l, r in zip(all_feat[:-1], all_feat[1:])]
+        all_sim = (
+            np.sum(pooled_feat[:-1] * pooled_feat[1:], axis=1)
+            / np.linalg.norm(pooled_feat[:-1], axis=1)
+            / np.linalg.norm(pooled_feat[1:], axis=1)
+        )
         min_id = np.argmax(all_sim)
         while all_sim[min_id] >= merge_threshold and len(seg_boundary_frame_pairs) >= 3:
             l_merge, r_merge = seg_boundary_frame_pairs[min_id], seg_boundary_frame_pairs[min_id + 1]
@@ -126,14 +178,15 @@ def min_cut(
                 pair for i, pair in enumerate(seg_boundary_frame_pairs) if i != min_id and i != min_id + 1
             ]
             seg_boundary_frame_pairs.insert(min_id, [l_merge[0], r_merge[1]])
-            all_feat = [hidden_states[l:r].mean(0) for l, r in seg_boundary_frame_pairs]
-            all_sim = [
-                np.dot(l, r) / (np.linalg.norm(l) * np.linalg.norm(r)) for l, r in zip(all_feat[:-1], all_feat[1:])
-            ]
+            pooled_feat = np.stack([hidden_states[l:r].mean(0) for l, r in seg_boundary_frame_pairs])
+            all_sim = (
+                np.sum(pooled_feat[:-1] * pooled_feat[1:], axis=1)
+                / np.linalg.norm(pooled_feat[:-1], axis=1)
+                / np.linalg.norm(pooled_feat[1:], axis=1)
+            )
             min_id = np.argmax(all_sim)
 
     boundaries = np.stack([[l * sec_per_frame, r * sec_per_frame] for l, r in seg_boundary_frame_pairs])
-    pooled_feat = np.stack([hidden_states[l:r].mean(0) for l, r in seg_boundary_frame_pairs])
     return boundaries, pooled_feat, np.array(seg_boundary_frame_pairs)
 
 
@@ -141,7 +194,7 @@ def mincut_wrapper(ckpt_path):
     ckpt = np.load(ckpt_path, allow_pickle=True)[()]
     hidden_states = ckpt["hidden_states"]  # (n_frames, 768)
 
-    boundaries, pooled_feat, frame_boundary = min_cut(hidden_states)
+    boundaries, pooled_feat, frame_boundary = mincut_numpy(hidden_states)
     durations = frame_boundary[:, 1] - frame_boundary[:, 0]
 
     ckpt["segments"] = boundaries

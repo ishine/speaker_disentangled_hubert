@@ -1,9 +1,5 @@
 #!/bin/sh
 
-cd src/s5hubert/mincut
-python setup.py build_ext --inplace
-cd -
-
 git clone https://github.com/cheoljun95/sdhubert.git src/sdhubert
 git clone https://github.com/jasonppy/syllable-discovery.git src/vghubert
 

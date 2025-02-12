@@ -25,7 +25,7 @@ from transformers import Wav2Vec2Processor
 from transformers.modeling_outputs import SequenceClassifierOutput
 from transformers.models.hubert.modeling_hubert import HubertModel
 
-from ..mincut.mincut_utils import min_cut
+from ..mincut.mincut_utils import mincut_torch
 from ..utils.misc import fix_random_seed
 from .modules import init_module
 
@@ -55,28 +55,28 @@ class HubertForSyllableDiscovery(nn.Module):
         fix_random_seed(seed)
 
     @torch.inference_mode()
-    def get_hidden_states(self, input_values: torch.Tensor) -> np.ndarray:
+    def get_hidden_states(self, input_values: torch.Tensor) -> torch.Tensor:
         input_values = input_values.cpu().numpy()
         input_values = self.processor(input_values, sampling_rate=16000, return_tensors="pt").input_values
         input_values = input_values.to(self.hubert.device)
         hidden_states = self.hubert(input_values, output_hidden_states=True).hidden_states
-        return hidden_states[self.segmentation_layer].squeeze(0).cpu().numpy()
+        return hidden_states[self.segmentation_layer].squeeze(0)
 
-    def forward(self, input_values: torch.Tensor) -> Dict[str, np.ndarray]:
+    def forward(self, input_values: torch.Tensor) -> Dict[str, torch.Tensor]:
         hidden_states = self.get_hidden_states(input_values)
         if self.quantizer1 is None or self.quantizer2 is None:
             return {"hidden_states": hidden_states}
 
         frame_similarity = hidden_states @ hidden_states.T
-        boundary, segment_features, frame_boundary = min_cut(hidden_states)
+        boundary, segment_features, frame_boundary = mincut_torch(hidden_states)
 
         # deduplicated syllabic units
-        units = torch.cdist(torch.from_numpy(segment_features).to(self.quantizer1.device), self.quantizer1).argmin(1)
-        units = self.quantizer2[units].cpu().numpy()
+        units = torch.cdist(segment_features, self.quantizer1).argmin(1)
+        units = self.quantizer2[units]
 
         # duplicated syllabic units
         durations = frame_boundary[:, 1] - frame_boundary[:, 0]
-        duplicated_units = np.repeat(units, durations)
+        duplicated_units = torch.repeat_interleave(units, durations)
         return {
             "units": units,
             "duplicated_units": duplicated_units,

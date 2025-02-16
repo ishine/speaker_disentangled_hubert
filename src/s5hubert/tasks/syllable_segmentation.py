@@ -60,4 +60,10 @@ def syllable_segmentation(config):
                 segment_paths.append(segment_path)
                 np.save(segment_path, outputs)
 
-    parallel_mincut(segment_paths, config.common.disable_tqdm)
+    parallel_mincut(
+        segment_paths,
+        config.common.disable_tqdm,
+        config.mincut.merge_threshold,
+        config.mincut.max_duration,
+        config.mincut.num_workers,
+    )

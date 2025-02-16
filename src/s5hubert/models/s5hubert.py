@@ -15,7 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, Optional, Tuple, Union
+from functools import partial
+from multiprocessing import Pool
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -24,7 +26,7 @@ from torch import nn
 from transformers.modeling_outputs import SequenceClassifierOutput
 from transformers.models.hubert.modeling_hubert import HubertEncoderLayer, HubertModel, HubertPreTrainedModel
 
-from ..mincut.mincut_utils import mincut_torch
+from ..mincut.mincut_utils import mincut_numpy, mincut_torch
 from ..utils.misc import fix_random_seed
 from .modules import MLP, init_module
 
@@ -287,6 +289,82 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
 
         self.register_buffer("quantizer1", torch.from_numpy(quantizer1.cluster_centers_))
         self.register_buffer("quantizer2", torch.from_numpy(quantizer2))
+
+    def extract_features(
+        self,
+        input_values: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+    ) -> List[np.ndarray]:
+        extract_features = self.hubert.feature_extractor(input_values)
+        extract_features = extract_features.transpose(1, 2)
+
+        lengths = torch.full((extract_features.shape[0],), extract_features.shape[1], dtype=torch.int)
+        if attention_mask is not None:
+            # compute reduced attention_mask corresponding to feature vectors
+            attention_mask = self.hubert._get_feature_vector_attention_mask(extract_features.shape[1], attention_mask)
+            lengths = attention_mask.sum(dim=1)
+
+        hidden_states = self.hubert.feature_projection(extract_features)
+
+        if attention_mask is not None:
+            # make sure padded tokens output 0
+            expand_attention_mask = attention_mask.unsqueeze(-1).repeat(1, 1, hidden_states.shape[2])
+            hidden_states[~expand_attention_mask] = 0
+
+            # extend attention_mask
+            attention_mask = 1.0 - attention_mask[:, None, None, :].to(dtype=hidden_states.dtype)
+            attention_mask = attention_mask * torch.finfo(hidden_states.dtype).min
+            attention_mask = attention_mask.expand(
+                attention_mask.shape[0], 1, attention_mask.shape[-1], attention_mask.shape[-1]
+            )
+
+        position_embeddings = self.hubert.encoder.pos_conv_embed(hidden_states)
+        hidden_states = hidden_states + position_embeddings
+        hidden_states = self.hubert.encoder.layer_norm(hidden_states)
+
+        for layer in self.hubert.encoder.layers[: self.segmentation_layer]:
+            hidden_states = layer(hidden_states, attention_mask=attention_mask)[0]
+
+        hidden_states = hidden_states.cpu().numpy()
+
+        return [h[:l] for h, l in zip(hidden_states, lengths)]
+
+    # @torch.amp.autocast("cuda")
+    @torch.inference_mode()
+    def batch_forward(
+        self,
+        input_values: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        sec_per_frame: float = 0.02,
+        sec_per_syllable: float = 0.2,
+        merge_threshold: Optional[float] = 0.3,
+        max_duration: int = 50,
+        num_workers: Optional[int] = None,
+    ) -> List[Dict[str, torch.Tensor]]:
+        hidden_states = self.extract_features(input_values, attention_mask)
+
+        outputs = []
+
+        with Pool(num_workers) as p:
+            for boundary, segment_features, frame_boundary in p.imap(
+                partial(
+                    mincut_numpy,
+                    sec_per_frame=sec_per_frame,
+                    sec_per_syllable=sec_per_syllable,
+                    merge_threshold=merge_threshold,
+                    max_duration=max_duration,
+                ),
+                hidden_states,
+            ):
+                units = torch.cdist(
+                    torch.from_numpy(segment_features).to(self.quantizer1.device), self.quantizer1
+                ).argmin(1)
+                units = self.quantizer2[units]
+
+                frame_boundary = torch.from_numpy(frame_boundary).to(units.device)
+                durations = frame_boundary[:, 1] - frame_boundary[:, 0]
+                outputs.append({"units": units, "durations": durations})
+        return outputs
 
     @torch.inference_mode()
     def get_hidden_states(self, input_values: torch.Tensor) -> torch.Tensor:

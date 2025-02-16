@@ -1,4 +1,5 @@
 import math
+from functools import partial
 from multiprocessing import Pool
 from typing import Optional, Tuple
 
@@ -197,11 +198,13 @@ def mincut_numpy(
     return boundaries, pooled_feat, np.array(seg_boundary_frame_pairs)
 
 
-def mincut_wrapper(ckpt_path):
+def mincut_wrapper(ckpt_path, merge_threshold: Optional[float] = 0.3, max_duration: int = 50):
     ckpt = np.load(ckpt_path, allow_pickle=True)[()]
     hidden_states = ckpt["hidden_states"]  # (n_frames, 768)
 
-    boundaries, pooled_feat, frame_boundary = mincut_numpy(hidden_states)
+    boundaries, pooled_feat, frame_boundary = mincut_numpy(
+        hidden_states, merge_threshold=merge_threshold, max_duration=max_duration
+    )
     durations = frame_boundary[:, 1] - frame_boundary[:, 0]
 
     ckpt["segments"] = boundaries
@@ -210,10 +213,18 @@ def mincut_wrapper(ckpt_path):
     np.save(ckpt_path, ckpt)
 
 
-def parallel_mincut(ckpt_paths, disable_tqdm: bool):
-    with Pool() as p:
+def parallel_mincut(
+    ckpt_paths,
+    disable_tqdm: bool = True,
+    merge_threshold: Optional[float] = 0.3,
+    max_duration: int = 50,
+    num_workers: Optional[int] = None,
+):
+    with Pool(num_workers) as p:
         for _ in tqdm(
-            p.imap_unordered(mincut_wrapper, ckpt_paths),
+            p.imap_unordered(
+                partial(mincut_wrapper, merge_threshold=merge_threshold, max_duration=max_duration), ckpt_paths
+            ),
             desc="minimum cut algorithm",
             total=len(ckpt_paths),
             disable=disable_tqdm,

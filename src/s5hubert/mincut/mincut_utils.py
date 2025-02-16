@@ -33,18 +33,22 @@ def mincut_dp_torch(W: torch.Tensor, num_syllables: int, max_duration: int = 50)
     cut = vol - W_sum
     ncut = cut / (cut + W_sum / 2)
 
+    # gather_indices: (max_duration, T)
+    gather_indices = (
+        torch.as_strided(torch.arange(1 - max_duration, T, device=W.device), (T, max_duration), (1, 1)).clip(0).T
+    )
+    ncut = torch.take_along_dim(ncut, gather_indices, 0)  # (max_duration, T)
+
     B = torch.zeros((T + 1, num_syllables + 1), dtype=torch.int)
     C = torch.full((T + 1, num_syllables + 1), torch.finfo(W.dtype).max, device=W.device)
     C[0, 0] = 0
 
     # dynamic programming
-    for t in range(1, T + 1):
-        start = max(0, t - max_duration)
-        s = min(num_syllables, t)
-        c = C[start:t, :s] + ncut[start:t, t - 1 : t]
-        idx = torch.argmin(c, dim=0, keepdim=True)
-        B[t, 1 : s + 1] = idx + start
-        C[t, 1 : s + 1] = torch.gather(c, dim=0, index=idx)
+    for s in range(1, num_syllables + 1):
+        c = torch.take_along_dim(torch.broadcast_to(C[:T, s - 1 : s], (T, T)), gather_indices, 0) + ncut  # (d, T)
+        min = torch.min(c, dim=0, keepdim=True)  # (1, T)
+        B[1:, s] = torch.take_along_dim(gather_indices, min.indices, 0).squeeze(0)
+        C[1:, s] = min.values.squeeze(0)
 
     # backtrack
     prev_b = T
@@ -99,7 +103,7 @@ def mincut_torch(
 def mincut_dp_numpy(W: np.ndarray, num_syllables: int, max_duration: int = 50):
     """
     Args:
-        W (`torch.FloatTensor` of shape `(sequence_length, sequence_length)`):
+        W (`np.ndarray` of shape `(sequence_length, sequence_length)`):
             Self-similarity matrix.
     """
     T = W.shape[0]
@@ -123,18 +127,21 @@ def mincut_dp_numpy(W: np.ndarray, num_syllables: int, max_duration: int = 50):
     with np.errstate(invalid="ignore"):
         ncut = cut / (cut + W_sum / 2)
 
+    # gather_indices: (max_duration, T)
+    x = np.arange(1 - max_duration, T)
+    gather_indices = np.lib.stride_tricks.as_strided(x, (T, max_duration), (x.strides[0], x.strides[0])).clip(0).T
+    ncut = np.take_along_axis(ncut, gather_indices, 0)  # (max_duration, T)
+
     B = np.zeros((T + 1, num_syllables + 1), dtype=np.int32)
     C = np.full((T + 1, num_syllables + 1), np.finfo(W.dtype).max)
     C[0, 0] = 0
 
     # dynamic programming
-    for t in range(1, T + 1):
-        start = max(0, t - max_duration)
-        s = min(num_syllables, t)
-        c = C[start:t, :s] + ncut[start:t, t - 1 : t]
-        idx = np.argmin(c, axis=0, keepdims=True)
-        B[t, 1 : s + 1] = idx + start
-        C[t, 1 : s + 1] = np.take_along_axis(c, axis=0, indices=idx)
+    for s in range(1, num_syllables + 1):
+        c = np.take_along_axis(np.broadcast_to(C[:T, s - 1 : s], (T, T)), gather_indices, 0) + ncut  # (d, T)
+        min_indices = np.argmin(c, axis=0, keepdims=True)  # (1, T)
+        B[1:, s] = np.take_along_axis(gather_indices, min_indices, 0).squeeze(0)
+        C[1:, s] = np.take_along_axis(c, min_indices, 0).squeeze(0)
 
     # backtrack
     prev_b = T

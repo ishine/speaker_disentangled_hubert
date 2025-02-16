@@ -285,8 +285,8 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         quantizer2 = AgglomerativeClustering(self.n_units_step2)
         quantizer2.fit_predict(quantizer1.cluster_centers_)
 
-        self.quantizer1 = torch.from_numpy(quantizer1.cluster_centers_)
-        self.quantizer2 = torch.from_numpy(quantizer2)
+        self.register_buffer("quantizer1", torch.from_numpy(quantizer1.cluster_centers_))
+        self.register_buffer("quantizer2", torch.from_numpy(quantizer2))
 
     @torch.inference_mode()
     def get_hidden_states(self, input_values: torch.Tensor) -> torch.Tensor:

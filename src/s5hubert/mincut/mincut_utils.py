@@ -194,7 +194,7 @@ def mincut_numpy(
             )
             min_id = np.argmax(all_sim)
 
-    boundaries = np.stack([[l * sec_per_frame, r * sec_per_frame] for l, r in seg_boundary_frame_pairs])
+    boundaries = np.array(seg_boundary_frame_pairs) * sec_per_frame
     return boundaries, pooled_feat, np.array(seg_boundary_frame_pairs)
 
 

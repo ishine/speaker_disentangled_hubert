@@ -26,7 +26,7 @@ from torch import nn
 from transformers.modeling_outputs import SequenceClassifierOutput
 from transformers.models.hubert.modeling_hubert import HubertEncoderLayer, HubertModel, HubertPreTrainedModel
 
-from ..mincut.mincut_utils import mincut_numpy, mincut_torch
+from ..mincut.mincut_utils import mincut_numpy
 from ..utils.misc import fix_random_seed
 from .modules import MLP, init_module
 
@@ -252,6 +252,7 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         self.segmentation_layer = segmentation_layer
         self.n_units_step1 = n_units_step1
         self.n_units_step2 = n_units_step2
+        self.sec_per_frame = np.prod(config.conv_stride) / 16000
 
         self.hubert = HubertModel(config)
         self.hubert.eval()
@@ -335,7 +336,6 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         self,
         input_values: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
-        sec_per_frame: float = 0.02,
         sec_per_syllable: float = 0.2,
         merge_threshold: Optional[float] = 0.3,
         max_duration: int = 50,
@@ -345,9 +345,17 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         Args:
             input_values (`torch.FloatTensor` of shape `(batch_size, sequence_length)`):
                 Raw speech waveform.
-            attention_mask (`torch.LongTensor` of shape `(batch_size, sequence_length)`):
+            attention_mask (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
                 1: non-mask
                 0: mask
+            sec_per_syllable (`float`):
+                Seconds per syllable, used to predefine the number of syllables in the input speech.
+            merge_threshold (`float`, *optional*):
+                Merge threshold of the cosine similarity between adjacent syllabic segments.
+            max_duration (`int`):
+                The maximum unit duration, measured in frames, before adjacent segment merge.
+            num_workers (`int`, *optional*):
+                The number of processes for the parallel minimum cut algorithm.
 
         Returns:
             units (`torch.LongTensor`):
@@ -355,7 +363,7 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
             intermediate_units (`torch.LongTensor`):
                 Intermediate K-means units.
             durations (`torch.LongTensor`):
-                Durations of units, measured in frame.
+                Durations of units, measured in frames.
             dense (`torch.FloatTensor` of shape `((sequence_length - 400) // 320 + 1, hidden_size)`):
                 Latent speech frame representations extracted from the syllable segmentation layer.
         """
@@ -363,7 +371,7 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
 
         mincut_fn = partial(
             mincut_numpy,
-            sec_per_frame=sec_per_frame,
+            sec_per_frame=self.sec_per_frame,
             sec_per_syllable=sec_per_syllable,
             merge_threshold=merge_threshold,
             max_duration=max_duration,

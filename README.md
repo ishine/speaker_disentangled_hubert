@@ -11,7 +11,7 @@ This is the official repository of the IEEE SLT 2024 paper [Self-Supervised Syll
 ## Setup
 
 ```shell
-conda create -y -n py310 python=3.10.14 pip=24.0
+conda create -y -n py310 python=3.10.15 pip=24.0
 conda activate py310
 pip install -r requirements/requirements.txt
 
@@ -37,10 +37,10 @@ waveform, sr = torchaudio.load(wav_path)
 waveform = torchaudio.functional.resample(waveform, sr, 16000)
 
 # encode a waveform into pseudo-syllabic units
-outputs = model(waveform.cuda())
+batch_outputs = model(waveform.cuda())
 
 # pseudo-syllabic units
-units = outputs["units"]  # [3950, 67, ..., 503]
+units = batch_outputs[0]["units"]  # [3950, 67, ..., 503]
 ```
 
 ## Demo

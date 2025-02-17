@@ -331,7 +331,7 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
 
     # @torch.amp.autocast("cuda")
     @torch.inference_mode()
-    def batch_forward(
+    def forward(
         self,
         input_values: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
@@ -341,72 +341,66 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         max_duration: int = 50,
         num_workers: Optional[int] = None,
     ) -> List[Dict[str, torch.Tensor]]:
-        hidden_states = self.extract_features(input_values, attention_mask)
+        """
+        Args:
+            input_values (`torch.FloatTensor` of shape `(batch_size, sequence_length)`):
+                Raw speech waveform.
+            attention_mask (`torch.LongTensor` of shape `(batch_size, sequence_length)`):
+                1: non-mask
+                0: mask
 
+        Returns:
+            units (`torch.LongTensor`):
+                Discrete pseudo-syllabic units.
+            intermediate_units (`torch.LongTensor`):
+                Intermediate K-means units.
+            durations (`torch.LongTensor`):
+                Durations of units, measured in frame.
+            dense (`torch.FloatTensor` of shape `((sequence_length - 400) // 320 + 1, hidden_size)`):
+                Latent speech frame representations extracted from the syllable segmentation layer.
+        """
         outputs = []
 
-        with Pool(num_workers) as p:
-            for boundary, segment_features, frame_boundary in p.imap(
-                partial(
-                    mincut_numpy,
-                    sec_per_frame=sec_per_frame,
-                    sec_per_syllable=sec_per_syllable,
-                    merge_threshold=merge_threshold,
-                    max_duration=max_duration,
-                ),
-                hidden_states,
-            ):
-                units = torch.cdist(
-                    torch.from_numpy(segment_features).to(self.quantizer1.device), self.quantizer1
-                ).argmin(1)
-                units = self.quantizer2[units]
-
-                frame_boundary = torch.from_numpy(frame_boundary).to(units.device)
-                durations = frame_boundary[:, 1] - frame_boundary[:, 0]
-                outputs.append({"units": units, "durations": durations})
-        return outputs
-
-    @torch.inference_mode()
-    def get_hidden_states(self, input_values: torch.Tensor) -> torch.Tensor:
-        hidden_states = self.hubert(input_values, output_hidden_states=True).hidden_states
-        return hidden_states[self.segmentation_layer].squeeze(0)
-
-    def forward(
-        self,
-        input_values: torch.Tensor,
-        sec_per_frame: float = 0.02,
-        sec_per_syllable: float = 0.2,
-        merge_threshold: Optional[float] = 0.3,
-        max_duration: int = 50,
-    ) -> Dict[str, torch.Tensor]:
-        hidden_states = self.get_hidden_states(input_values)
-
-        frame_similarity = hidden_states @ hidden_states.T
-        boundary, segment_features, frame_boundary = mincut_torch(
-            hidden_states,
+        mincut_fn = partial(
+            mincut_numpy,
             sec_per_frame=sec_per_frame,
             sec_per_syllable=sec_per_syllable,
             merge_threshold=merge_threshold,
             max_duration=max_duration,
         )
 
-        # deduplicated syllabic units
-        units_step1 = torch.cdist(segment_features, self.quantizer1).argmin(1)
-        units = self.quantizer2[units_step1]
+        hidden_states = self.extract_features(input_values, attention_mask)
 
-        # duplicated syllabic units
-        durations = frame_boundary[:, 1] - frame_boundary[:, 0]
-        duplicated_units = torch.repeat_interleave(units, durations)
-        return {
-            "units": units,
-            "units_step1": units_step1,
-            "duplicated_units": duplicated_units,
-            "boundary": boundary,
-            "frame_boundary": frame_boundary,
-            "hidden_states": hidden_states,
-            "frame_similarity": frame_similarity,
-            "durations": durations,
-        }
+        with Pool(num_workers) as p:
+            for dense, (_, segment_features, frame_boundary) in zip(hidden_states, p.imap(mincut_fn, hidden_states)):
+                # K-means
+                intermediate_units = torch.cdist(
+                    torch.from_numpy(segment_features).to(self.quantizer1.device), self.quantizer1
+                ).argmin(1)
+                # Agglomerative clustering on K-means centroids
+                units = self.quantizer2[intermediate_units]
+
+                dense = torch.from_numpy(dense).to(units.device)
+                frame_boundary = torch.from_numpy(frame_boundary).to(units.device)
+                durations = frame_boundary[:, 1] - frame_boundary[:, 0]
+
+                # duplicated_units = torch.repeat_interleave(units, durations)
+
+                outputs.append(
+                    {
+                        "units": units,
+                        "intermediate_units": intermediate_units,
+                        "durations": durations,
+                        "dense": dense,
+                        # "duplicated_units": duplicated_units,
+                    }
+                )
+        return outputs
+
+    @torch.inference_mode()
+    def get_hidden_states(self, input_values: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.hubert(input_values, output_hidden_states=True).hidden_states
+        return hidden_states[self.segmentation_layer].squeeze(0)
 
 
 class S5HubertForSequenceClassification(nn.Module):

@@ -330,7 +330,6 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
 
         return [h[:l] for h, l in zip(hidden_states, lengths)]
 
-    # @torch.amp.autocast("cuda")
     @torch.inference_mode()
     def forward(
         self,

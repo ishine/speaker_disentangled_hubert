@@ -1,5 +1,6 @@
 --extra-index-url https://download.pytorch.org/whl/cu121
 fairseq==0.12.2
+fire
 ipykernel==6.29.5
 joblib==1.4.0
 matplotlib==3.8.4

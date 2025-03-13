@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 from functools import partial
 from multiprocessing import Pool
 from typing import Dict, List, Optional, Tuple, Union
@@ -23,6 +24,7 @@ import numpy as np
 import torch
 from sklearn.cluster import AgglomerativeClustering, MiniBatchKMeans
 from torch import nn
+from torch.nn.utils.rnn import pad_sequence
 from transformers.modeling_outputs import SequenceClassifierOutput
 from transformers.models.hubert.modeling_hubert import HubertEncoderLayer, HubertModel, HubertPreTrainedModel
 
@@ -247,12 +249,14 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         n_units_step1: int = 16384,
         n_units_step2: int = 4096,
         seed: int = 0,
+        max_chunk: int = 400080,  # 25 seconds
     ):
         super().__init__(config)
         self.segmentation_layer = segmentation_layer
         self.n_units_step1 = n_units_step1
         self.n_units_step2 = n_units_step2
         self.sec_per_frame = np.prod(config.conv_stride) / 16000
+        self.max_chunk = max_chunk
 
         self.hubert = HubertModel(config)
         self.hubert.eval()
@@ -377,6 +381,113 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         )
 
         hidden_states = self.extract_features(input_values, attention_mask)
+
+        if num_workers is None:
+            num_workers = os.cpu_count()
+
+        num_workers = min(num_workers, len(hidden_states))
+
+        with Pool(num_workers) as p:
+            for dense, (_, segment_features, frame_boundary) in zip(hidden_states, p.imap(mincut_fn, hidden_states)):
+                # K-means
+                intermediate_units = torch.cdist(
+                    torch.from_numpy(segment_features).to(self.quantizer1.device), self.quantizer1
+                ).argmin(1)
+                # Agglomerative clustering on K-means centroids
+                units = self.quantizer2[intermediate_units]
+
+                dense = torch.from_numpy(dense).to(units.device)
+                frame_boundary = torch.from_numpy(frame_boundary).to(units.device)
+                durations = frame_boundary[:, 1] - frame_boundary[:, 0]
+
+                # duplicated_units = torch.repeat_interleave(units, durations)
+
+                outputs.append(
+                    {
+                        "units": units,
+                        "intermediate_units": intermediate_units,
+                        "durations": durations,
+                        "dense": dense,
+                        # "duplicated_units": duplicated_units,
+                    }
+                )
+        return outputs
+
+    @torch.inference_mode()
+    def chunk_forward(
+        self,
+        input_values: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        sec_per_syllable: float = 0.2,
+        merge_threshold: Optional[float] = 0.3,
+        max_duration: int = 50,
+        num_workers: Optional[int] = None,
+    ) -> List[Dict[str, torch.Tensor]]:
+        """
+        process a single long (e.g., 1 hour) speech.
+
+        Args:
+            input_values (`torch.FloatTensor` of shape `(batch_size, sequence_length)`):
+                Raw speech waveform.
+            attention_mask (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
+                1: non-mask
+                0: mask
+            sec_per_syllable (`float`):
+                Seconds per syllable, used to predefine the number of syllables in the input speech.
+            merge_threshold (`float`, *optional*):
+                Merge threshold of the cosine similarity between adjacent syllabic segments.
+            max_duration (`int`):
+                The maximum unit duration, measured in frames, before adjacent segment merge.
+            num_workers (`int`, *optional*):
+                The number of processes for the parallel minimum cut algorithm.
+
+        Returns:
+            units (`torch.LongTensor`):
+                Discrete pseudo-syllabic units.
+            intermediate_units (`torch.LongTensor`):
+                Intermediate K-means units.
+            durations (`torch.LongTensor`):
+                Durations of units, measured in frames.
+            dense (`torch.FloatTensor` of shape `((sequence_length - 400) // 320 + 1, hidden_size)`):
+                Latent speech frame representations extracted from the syllable segmentation layer.
+        """
+        assert len(input_values) == 1
+
+        outputs = []
+
+        mincut_fn = partial(
+            mincut_numpy,
+            sec_per_frame=self.sec_per_frame,
+            sec_per_syllable=sec_per_syllable,
+            merge_threshold=merge_threshold,
+            max_duration=max_duration,
+        )
+
+        if attention_mask is None:
+            attention_mask = torch.ones_like(input_values, dtype=torch.long)
+
+        input_values = input_values.squeeze(0)
+        attention_mask = attention_mask.squeeze(0)
+
+        # split a long sequence into chunks
+        input_values = torch.split(input_values, self.max_chunk)  # Tuple[torch.Tensor of shape `(len,)`]
+        attention_mask = torch.split(attention_mask, self.max_chunk)  # Tuple[torch.Tensor of shape `(len,)`]
+
+        input_values = pad_sequence(input_values, batch_first=True)  # (num_chunks, max_chunk)
+        attention_mask = pad_sequence(attention_mask, batch_first=True)  # (num_chunks, max_chunk)
+
+        if num_workers is None:
+            num_workers = os.cpu_count()
+
+        num_workers = min(num_workers, len(input_values))
+
+        # split chunks into batch
+        input_values = torch.split(input_values, num_workers)
+        attention_mask = torch.split(attention_mask, num_workers)
+
+        hidden_states = []  # List[np.ndarray]
+        for batch_input_values, batch_attention_mask in zip(input_values, attention_mask):
+            hidden_states += self.extract_features(batch_input_values, batch_attention_mask)
 
         with Pool(num_workers) as p:
             for dense, (_, segment_features, frame_boundary) in zip(hidden_states, p.imap(mincut_fn, hidden_states)):

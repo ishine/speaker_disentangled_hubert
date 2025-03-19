@@ -1,14 +1,78 @@
 from pathlib import Path
 
+import numpy as np
 import torch
+import torchaudio
 from torch.utils.data import ConcatDataset
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
+from ...sdhubert.utils.syllable import BoundaryDetectionEvaluator
+from ..mincut.mincut_utils import parallel_mincut
 from ..models.s5hubert import S5Hubert
 from ..models.s5hubert_dino import S5HubertDino
 from ..utils.data import LibriSpeech
 from ..utils.misc import fix_random_seed, get_tri_stage_schedule
+
+
+@torch.inference_mode()
+def validate(config, model, writer: SummaryWriter, step: int):
+    model.eval()
+    torch.cuda.empty_cache()
+
+    wav_dir = Path(config.dataset.root) / "LibriSpeech"
+    segment_dir = Path(config.path.segment_dir)
+    segment_paths = []
+
+    with open(config.dataset.dev_file) as f:
+        for n, wav_name in enumerate(f):
+            wav_name = wav_name.rstrip()
+            wav_path = wav_dir / wav_name
+            wav_path = str(wav_path)  # for sox backend
+            wav, sr = torchaudio.load(wav_path)
+            wav = wav.cuda()
+
+            hidden_states, _ = model.student_forward(wav)
+            hidden_states = hidden_states[config.model.segmentation_layer].squeeze(0).cpu().numpy()
+            outputs = {"hidden_states": hidden_states}
+
+            # save hidden states
+            segment_name = wav_name.replace(".flac", ".npy")
+            segment_path = segment_dir / segment_name
+            segment_path.parent.mkdir(parents=True, exist_ok=True)
+            segment_paths.append(segment_path)
+            np.save(segment_path, outputs)
+
+            if n < 10:
+                similarity_mat = hidden_states @ hidden_states.T
+                min_value = np.min(similarity_mat)
+                max_value = np.max(similarity_mat)
+                similarity_mat = (similarity_mat - min_value) / (max_value - min_value)
+                writer.add_image(f"dev/{n}", similarity_mat, step, dataformats="HW")
+
+    parallel_mincut(
+        segment_paths,
+        config.common.disable_tqdm,
+        config.mincut.merge_threshold,
+        config.mincut.max_duration,
+        config.mincut.num_workers,
+    )
+
+    results = BoundaryDetectionEvaluator(
+        config.path.segment_dir,
+        config.dataset.dev_alignment,
+        config.dataset.dev_alignment,
+        tolerance=0.05,
+        max_val_num=None,
+    ).evaluate()
+
+    for key in results:
+        writer.add_scalar(f"dev/{key}", results[key], step)
+
+    model.train()
+    torch.cuda.empty_cache()
+
+    return results
 
 
 def train(config):
@@ -89,7 +153,7 @@ def train(config):
     )
 
     scaler = torch.amp.GradScaler("cuda", enabled=config.common.fp16)
-    writer = SummaryWriter()
+    writer = SummaryWriter(config.path.checkpoint)
 
     last_epoch = 0
     step = 0
@@ -155,6 +219,8 @@ def train(config):
 
             if step == warmup_steps:
                 model.defrost_transformer_encoder()
+
+        results = validate(config, model, writer, step)
 
         # save model
         # ckpt = {

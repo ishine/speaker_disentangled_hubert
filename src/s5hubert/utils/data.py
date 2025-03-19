@@ -2,9 +2,11 @@ import random
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
+import librosa
 import numpy as np
 import torch
 import torchaudio
+from torch.nn.utils.rnn import pad_sequence
 
 from .nansy import _load_waveform, change_gender, random_eq
 
@@ -26,6 +28,7 @@ class LibriSpeech(torchaudio.datasets.LIBRISPEECH):
         teacher_input_values = _load_waveform(self._archive, metadata[0], metadata[1])
 
         if self.max_sample_size is not None:
+            # teacher_input_values, _ = librosa.effects.trim(teacher_input_values, top_db=20)
             diff = len(teacher_input_values) - self.max_sample_size
             if diff > 0:
                 start = random.randrange(diff)
@@ -46,23 +49,16 @@ class LibriSpeech(torchaudio.datasets.LIBRISPEECH):
 
     @staticmethod
     def collate_fn(batch) -> Dict[str, torch.Tensor]:
-        teacher_lengths = [len(item["teacher_input_values"]) for item in batch]
-        student_lengths = [len(item["student_input_values"]) for item in batch]
+        teacher_input_values = [item["teacher_input_values"] for item in batch]
+        student_input_values = [item["student_input_values"] for item in batch]
 
-        bsz = len(batch)
-        max_teacher_len = max(teacher_lengths)
-        max_student_len = max(student_lengths)
+        teacher_attention_mask = [torch.ones_like(item["teacher_input_values"], dtype=torch.long) for item in batch]
+        student_attention_mask = [torch.ones_like(item["student_input_values"], dtype=torch.long) for item in batch]
 
-        teacher_input_values = torch.zeros(bsz, max_teacher_len)
-        student_input_values = torch.zeros(bsz, max_student_len)
-        teacher_attention_mask = torch.ones(bsz, max_teacher_len, dtype=torch.long)
-        student_attention_mask = torch.ones(bsz, max_student_len, dtype=torch.long)
-
-        for n, item in enumerate(batch):
-            teacher_input_values[n, : teacher_lengths[n]] = item["teacher_input_values"]
-            student_input_values[n, : student_lengths[n]] = item["student_input_values"]
-            teacher_attention_mask[n, teacher_lengths[n] :] = 0
-            student_attention_mask[n, student_lengths[n] :] = 0
+        teacher_input_values = pad_sequence(teacher_input_values, batch_first=True)
+        student_input_values = pad_sequence(student_input_values, batch_first=True)
+        teacher_attention_mask = pad_sequence(teacher_attention_mask, batch_first=True)
+        student_attention_mask = pad_sequence(student_attention_mask, batch_first=True)
 
         return {
             "teacher_input_values": teacher_input_values,

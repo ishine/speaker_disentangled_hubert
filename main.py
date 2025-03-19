@@ -3,6 +3,7 @@ from omegaconf import OmegaConf
 
 from src.s5hubert.tasks.clustering import clustering
 from src.s5hubert.tasks.eval import evaluate
+from src.s5hubert.tasks.speaker_identification import speaker_identification
 from src.s5hubert.tasks.syllable_segmentation import syllable_segmentation
 from src.s5hubert.tasks.train import train
 
@@ -23,6 +24,10 @@ class TaskRunner:
     def evaluate(self, config: str = "configs/speech2unit/default.yaml"):
         config = OmegaConf.load(config)
         evaluate(config)
+
+    def speaker_identification(self, config: str = "configs/speaker_identification/default.yaml"):
+        config = OmegaConf.load(config)
+        speaker_identification(config)
 
     def __call__(self, config: str = "configs/speech2unit/default.yaml"):
         config = OmegaConf.load(config)

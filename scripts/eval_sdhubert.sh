@@ -25,4 +25,4 @@ python extract_segments.py \
 
 cd -
 
-python main.py --config configs/sdhubert.yaml
+python main.py evaluate --config configs/sdhubert.yaml

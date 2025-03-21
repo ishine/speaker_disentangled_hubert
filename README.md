@@ -11,7 +11,7 @@ This is the official repository of the IEEE SLT 2024 paper [Self-Supervised Syll
 ## Setup
 
 ```shell
-conda create -y -n py310 python=3.10.15 pip=24.0
+conda create -y -n py310 python=3.10.16 pip=24.0
 conda activate py310
 pip install -r requirements/requirements.txt
 

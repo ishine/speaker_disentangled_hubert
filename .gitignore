@@ -1,8 +1,7 @@
 .vscode
 __pycache__
-src/s5hubert/mincut/build
-src/s5hubert/mincut/mincut.c*
 src/sdhubert
+src/sylber
 src/vghubert
 results
 runs

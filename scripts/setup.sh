@@ -2,6 +2,7 @@
 
 git clone https://github.com/cheoljun95/sdhubert.git src/sdhubert
 git clone https://github.com/jasonppy/syllable-discovery.git src/vghubert
+git clone https://github.com/Berkeley-Speech-Group/sylber.git src/sylber
 
 cd src/sdhubert
 git checkout ecb6469

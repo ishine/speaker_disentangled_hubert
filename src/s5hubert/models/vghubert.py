@@ -16,6 +16,7 @@
 # limitations under the License.
 
 import pickle
+import warnings
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -55,7 +56,10 @@ class VGHubertForSyllableDiscovery(nn.Module):
     ):
         super().__init__()
         self.segmentation_layer = segmentation_layer
-        self.hubert = load_vghubert(checkpoint_path)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            self.hubert = load_vghubert(checkpoint_path)
 
         self.register_buffer(
             "quantizer1", torch.from_numpy(joblib.load(quantizer1_path).cluster_centers_) if quantizer1_path else None
@@ -112,7 +116,11 @@ class VGHubertForSequenceClassification(nn.Module):
         hidden_size: int = 768,
     ):
         super().__init__()
-        self.hubert = load_vghubert(model_name_or_path)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            self.hubert = load_vghubert(model_name_or_path)
+
         self.projector = nn.Linear(hidden_size, classifier_proj_size)
         self.classifier = nn.Linear(classifier_proj_size, num_labels, bias=False)
 

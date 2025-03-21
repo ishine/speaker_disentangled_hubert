@@ -6,9 +6,6 @@ from sklearn.cluster import AgglomerativeClustering, MiniBatchKMeans
 
 
 def clustering(config):
-    if config.model.model_type == "sdhubert":
-        return
-
     segment_dir = Path(config.path.segment_dir)
     segment_paths = []
 

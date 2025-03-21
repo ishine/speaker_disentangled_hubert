@@ -7,5 +7,5 @@ wget -t 0 -c -P ${dataset_root}/VoxCeleb1 https://huggingface.co/datasets/Progra
 
 cd ${dataset_root}/VoxCeleb1
 
-unzip -q vox1_dev_wav.zip
-unzip -q vox1_test_wav.zip
+unzip vox1_dev_wav.zip
+unzip vox1_test_wav.zip

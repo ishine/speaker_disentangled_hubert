@@ -77,4 +77,4 @@ def evaluate(config):
 
     Path(config.path.result).parent.mkdir(parents=True, exist_ok=True)
     with open(config.path.result, "w") as f:
-        json.dump(results, f)
+        json.dump(results, f, indent=2)

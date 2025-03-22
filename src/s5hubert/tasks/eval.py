@@ -7,6 +7,7 @@ import joblib
 import numpy as np
 import pandas as pd
 import torch
+import torchaudio
 
 from ...sdhubert.utils.syllable import BoundaryDetectionEvaluator, match_cluster
 from ..utils.misc import compute_cluster_purity, compute_mutual_info, compute_syllable_purity
@@ -25,6 +26,10 @@ def evaluate(config):
     syllable_counter = Counter()
 
     segment_dir = Path(config.path.segment_dir)
+
+    # unit frequency
+    total_seconds = 0
+    num_units = 0
 
     # maximum weight matching between ground truth syllables and predicted units
     for sample in dataset.values():
@@ -48,6 +53,13 @@ def evaluate(config):
         matching_counter.update(zip(ref_syllables[ref_indices], hyp_syllables[hyp_indices]))
         syllable_counter.update(ref_syllables[ref_indices])
 
+        # unit frequency
+        audio_path = Path(config.dataset.root) / "LibriSpeech" / sample["file_name"]
+        audio_path = str(audio_path)
+        metadata = torchaudio.info(audio_path)
+        total_seconds += metadata.num_frames / metadata.sample_rate
+        num_units += len(hyp_boundary)
+
     # joint prob
     p_xy = np.zeros((len(syllable_counter), config.n_clusters.step2))
     p_xy = pd.DataFrame(p_xy, index=list(syllable_counter))
@@ -70,10 +82,23 @@ def evaluate(config):
         max_val_num=None,
     ).evaluate()
 
+    unit_frequency = num_units / total_seconds
+
     results = {
         "segmentation": segmentation_results,
         "clustering": clustering_results,
+        "unit_frequency": unit_frequency,
     }
+
+    def round_float(results, ndigits: int = 3):
+        if isinstance(results, dict):
+            return {k: round_float(v) for k, v in results.items()}
+        elif isinstance(results, float):
+            return round(results, ndigits)
+        else:
+            return results
+
+    results = round_float(results)
 
     Path(config.path.result).parent.mkdir(parents=True, exist_ok=True)
     with open(config.path.result, "w") as f:

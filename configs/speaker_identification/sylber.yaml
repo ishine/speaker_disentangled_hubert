@@ -12,7 +12,7 @@ dataset:
   max_sample_size: 128000
 
 dataloader:
-  batch_size: 32 # work with single 24GB VRAM GPU
+  batch_size: 100 # work with single 24GB VRAM GPU
   num_workers: 30
 
 model:
@@ -23,7 +23,6 @@ model:
   segmentation_layer: 9
 
 optim:
-  epoch: 100
-  lr: 0.0001
+  epoch: 50
+  lr: 0.001
   weight_decay: 0.01
-  max_norm: 1.0

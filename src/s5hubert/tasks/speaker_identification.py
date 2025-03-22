@@ -22,17 +22,29 @@ MODELS = {
 }
 
 
+@torch.inference_mode()
 def evaluate(config, data_loader, model, writer: Optional[SummaryWriter] = None, epoch: Optional[int] = None):
     model.eval()
     accuracy = 0
 
-    with torch.amp.autocast("cuda", enabled=config.common.fp16):
+    with torch.amp.autocast("cuda", dtype=torch.bfloat16, enabled=config.common.fp16):
         for batch in tqdm(data_loader, disable=config.common.disable_tqdm):
-            outputs = model(
-                input_values=batch["waveform"].cuda(),
-                attention_mask=batch["attention_mask"].cuda(),
-                labels=batch["labels"].cuda(),
-            )
+            try:
+                outputs = model(
+                    input_values=batch["waveform"].cuda(),
+                    attention_mask=batch["attention_mask"].cuda(),
+                    labels=batch["labels"].cuda(),
+                )
+            except torch.cuda.OutOfMemoryError:
+                torch.cuda.empty_cache()
+                model.cpu()
+                outputs = model(
+                    input_values=batch["waveform"],
+                    attention_mask=batch["attention_mask"],
+                    labels=batch["labels"],
+                )
+                model.cuda()
+
             pred_label = torch.argmax(outputs.logits.squeeze(0))
             accuracy += pred_label == batch["labels"].item()
 
@@ -51,12 +63,12 @@ def speaker_identification(config):
         download=config.dataset.download,
         max_sample_size=config.dataset.max_sample_size,
     )
-    dev_set = VoxCeleb(
-        root=config.dataset.root,
-        subset="dev",
-        download=config.dataset.download,
-        max_sample_size=None,
-    )
+    # dev_set = VoxCeleb(
+    #     root=config.dataset.root,
+    #     subset="dev",
+    #     download=config.dataset.download,
+    #     max_sample_size=None,
+    # )
     test_set = VoxCeleb(
         root=config.dataset.root,
         subset="test",
@@ -70,10 +82,10 @@ def speaker_identification(config):
         shuffle=True,
         num_workers=config.dataloader.num_workers,
     )
-    dev_loader = torch.utils.data.DataLoader(
-        dev_set,
-        num_workers=config.dataloader.num_workers,
-    )
+    # dev_loader = torch.utils.data.DataLoader(
+    #     dev_set,
+    #     num_workers=config.dataloader.num_workers,
+    # )
     test_loader = torch.utils.data.DataLoader(
         test_set,
         num_workers=config.dataloader.num_workers,
@@ -100,7 +112,7 @@ def speaker_identification(config):
 
         last_epoch = ckpt["epoch"]
         step = ckpt["step"]
-        best_dev_accuracy = ckpt["dev_accuracy"]
+        # best_dev_accuracy = ckpt["dev_accuracy"]
         model.load_state_dict(ckpt["model"])
         optimizer.load_state_dict(ckpt["optimizer"])
         scaler.load_state_dict(ckpt["scaler"])
@@ -113,7 +125,7 @@ def speaker_identification(config):
         model.hubert.eval()
 
         for batch in tqdm(train_loader, desc=f"epoch {epoch}", disable=config.common.disable_tqdm):
-            with torch.amp.autocast("cuda", enabled=config.common.fp16):
+            with torch.amp.autocast("cuda", dtype=torch.bfloat16, enabled=config.common.fp16):
                 loss = model(
                     batch["waveform"].cuda(),
                     batch["attention_mask"].cuda(),
@@ -122,7 +134,7 @@ def speaker_identification(config):
 
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
-            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.optim.max_norm)
+            # grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.optim.max_norm)
 
             # update
             scaler.step(optimizer)
@@ -133,26 +145,26 @@ def speaker_identification(config):
             step += 1
 
             writer.add_scalar("train/loss", loss.item(), step)
-            writer.add_scalar("train/grad_norm", grad_norm, step)
+            # writer.add_scalar("train/grad_norm", grad_norm, step)
             writer.add_scalar("train/scale", scale, step)
 
-        dev_accuracy = evaluate(config, dev_loader, model, writer, epoch)
+        # dev_accuracy = evaluate(config, dev_loader, model, writer, epoch)
 
         ckpt = {
             "epoch": epoch,
             "step": step,
-            "dev_accuracy": dev_accuracy,
+            # "dev_accuracy": dev_accuracy,
             "model": model.state_dict(),
             "optimizer": optimizer.state_dict(),
             "scaler": scaler.state_dict(),
         }
         Path(config.path.checkpoint).parent.mkdir(parents=True, exist_ok=True)
-        if best_dev_accuracy < dev_accuracy:
-            best_dev_accuracy = dev_accuracy
-            torch.save(ckpt, config.path.checkpoint)
+        # if best_dev_accuracy < dev_accuracy:
+        #     best_dev_accuracy = dev_accuracy
+        torch.save(ckpt, config.path.checkpoint)
 
     # test the best model
-    ckpt = torch.load(config.path.checkpoint, weights_only=True)
-    model.load_state_dict(ckpt["model"])
+    # ckpt = torch.load(config.path.checkpoint, weights_only=True)
+    # model.load_state_dict(ckpt["model"])
     test_accuracy = evaluate(config, test_loader, model)
     print(f"test accuracy: {test_accuracy}")

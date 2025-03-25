@@ -15,11 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 from functools import partial
 from multiprocessing import Pool
 from typing import Dict, List, Optional, Tuple, Union
 
+import joblib
 import numpy as np
 import torch
 from sklearn.cluster import AgglomerativeClustering, MiniBatchKMeans
@@ -28,7 +28,7 @@ from torch.nn.utils.rnn import pad_sequence
 from transformers.modeling_outputs import SequenceClassifierOutput
 from transformers.models.hubert.modeling_hubert import HubertEncoderLayer, HubertModel, HubertPreTrainedModel
 
-from ..mincut.mincut_utils import mincut_numpy
+from ..mincut.mincut_utils import mincut_torch
 from ..utils.misc import fix_random_seed
 from .modules import MLP, init_module
 
@@ -250,6 +250,7 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         n_units_step2: int = 4096,
         seed: int = 0,
         max_chunk: int = 400080,  # 25 seconds
+        deduplicate: bool = True,
     ):
         super().__init__(config)
         self.segmentation_layer = segmentation_layer
@@ -257,6 +258,7 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         self.n_units_step2 = n_units_step2
         self.sec_per_frame = np.prod(config.conv_stride) / 16000
         self.max_chunk = max_chunk
+        self.deduplicate = deduplicate
 
         self.hubert = HubertModel(config)
         self.hubert.eval()
@@ -265,6 +267,26 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         self.register_buffer("quantizer2", torch.zeros(n_units_step1, dtype=torch.int))
 
         fix_random_seed(seed)
+
+    @classmethod
+    def load_pretrained(cls, model_path, quantizer1_path, quantizer2_path) -> "S5HubertForSyllableDiscovery":
+        """
+        huggingface-cli login
+        python
+
+        from src.s5hubert import S5HubertForSyllableDiscovery
+
+        model = S5HubertForSyllableDiscovery.load_pretrained(
+            "models/s5-hubert",
+            "models/s5-hubert/quantizer1.joblib",
+            "models/s5-hubert/quantizer2.npy",
+        )
+        model.push_to_hub("s5-hubert", private=True)
+        """
+        model = cls.from_pretrained(model_path)
+        model.quantizer1 = torch.from_numpy(joblib.load(quantizer1_path).cluster_centers_)
+        model.quantizer2 = torch.from_numpy(np.load(quantizer2_path))
+        return model
 
     def train_quantizer(
         self,
@@ -299,7 +321,7 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         self,
         input_values: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
-    ) -> List[np.ndarray]:
+    ) -> List[torch.Tensor]:
         extract_features = self.hubert.feature_extractor(input_values)
         extract_features = extract_features.transpose(1, 2)
 
@@ -330,8 +352,6 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         for layer in self.hubert.encoder.layers[: self.segmentation_layer]:
             hidden_states = layer(hidden_states, attention_mask=attention_mask)[0]
 
-        hidden_states = hidden_states.cpu().numpy()
-
         return [h[:l] for h, l in zip(hidden_states, lengths)]
 
     @torch.inference_mode()
@@ -342,7 +362,6 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         sec_per_syllable: float = 0.2,
         merge_threshold: Optional[float] = 0.3,
         max_duration: int = 50,
-        num_workers: Optional[int] = None,
     ) -> List[Dict[str, torch.Tensor]]:
         """
         Args:
@@ -357,8 +376,6 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
                 Merge threshold of the cosine similarity between adjacent syllabic segments.
             max_duration (`int`):
                 The maximum unit duration, measured in frames, before adjacent segment merge.
-            num_workers (`int`, *optional*):
-                The number of processes for the parallel minimum cut algorithm.
 
         Returns:
             units (`torch.LongTensor`):
@@ -373,7 +390,7 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         outputs = []
 
         mincut_fn = partial(
-            mincut_numpy,
+            mincut_torch,
             sec_per_frame=self.sec_per_frame,
             sec_per_syllable=sec_per_syllable,
             merge_threshold=merge_threshold,
@@ -382,35 +399,29 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
 
         hidden_states = self.extract_features(input_values, attention_mask)
 
-        if num_workers is None:
-            num_workers = os.cpu_count()
+        for dense in hidden_states:
+            _, segment_features, frame_boundary = mincut_fn(dense)
 
-        num_workers = min(num_workers, len(hidden_states))
+            # K-means
+            intermediate_units = torch.cdist(segment_features, self.quantizer1).argmin(1)
 
-        with Pool(num_workers) as p:
-            for dense, (_, segment_features, frame_boundary) in zip(hidden_states, p.imap(mincut_fn, hidden_states)):
-                # K-means
-                intermediate_units = torch.cdist(
-                    torch.from_numpy(segment_features).to(self.quantizer1.device), self.quantizer1
-                ).argmin(1)
-                # Agglomerative clustering on K-means centroids
-                units = self.quantizer2[intermediate_units]
+            # Agglomerative clustering on K-means centroids
+            units = self.quantizer2[intermediate_units]
 
-                dense = torch.from_numpy(dense).to(units.device)
-                frame_boundary = torch.from_numpy(frame_boundary).to(units.device)
-                durations = frame_boundary[:, 1] - frame_boundary[:, 0]
+            durations = frame_boundary[:, 1] - frame_boundary[:, 0]
 
-                # duplicated_units = torch.repeat_interleave(units, durations)
+            if not self.deduplicate:
+                units = torch.repeat_interleave(units, durations)
+                intermediate_units = torch.repeat_interleave(intermediate_units, durations)
 
-                outputs.append(
-                    {
-                        "units": units,
-                        "intermediate_units": intermediate_units,
-                        "durations": durations,
-                        "dense": dense,
-                        # "duplicated_units": duplicated_units,
-                    }
-                )
+            outputs.append(
+                {
+                    "units": units,
+                    "intermediate_units": intermediate_units,
+                    "durations": durations,
+                    "dense": dense,
+                }
+            )
         return outputs
 
     @torch.inference_mode()
@@ -421,7 +432,7 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         sec_per_syllable: float = 0.2,
         merge_threshold: Optional[float] = 0.3,
         max_duration: int = 50,
-        num_workers: Optional[int] = None,
+        batch_size: int = 16,
     ) -> List[Dict[str, torch.Tensor]]:
         """
         process a single long (e.g., 1 hour) speech.
@@ -438,8 +449,8 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
                 Merge threshold of the cosine similarity between adjacent syllabic segments.
             max_duration (`int`):
                 The maximum unit duration, measured in frames, before adjacent segment merge.
-            num_workers (`int`, *optional*):
-                The number of processes for the parallel minimum cut algorithm.
+            batch_size (`int`):
+                Batch size.
 
         Returns:
             units (`torch.LongTensor`):
@@ -456,7 +467,7 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         outputs = []
 
         mincut_fn = partial(
-            mincut_numpy,
+            mincut_torch,
             sec_per_frame=self.sec_per_frame,
             sec_per_syllable=sec_per_syllable,
             merge_threshold=merge_threshold,
@@ -476,43 +487,37 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         input_values = pad_sequence(input_values, batch_first=True)  # (num_chunks, max_chunk)
         attention_mask = pad_sequence(attention_mask, batch_first=True)  # (num_chunks, max_chunk)
 
-        if num_workers is None:
-            num_workers = os.cpu_count()
-
-        num_workers = min(num_workers, len(input_values))
-
         # split chunks into batch
-        input_values = torch.split(input_values, num_workers)
-        attention_mask = torch.split(attention_mask, num_workers)
+        input_values = torch.split(input_values, batch_size)
+        attention_mask = torch.split(attention_mask, batch_size)
 
-        hidden_states = []  # List[np.ndarray]
+        hidden_states = []  # List[torch.Tensor]
         for batch_input_values, batch_attention_mask in zip(input_values, attention_mask):
             hidden_states += self.extract_features(batch_input_values, batch_attention_mask)
 
-        with Pool(num_workers) as p:
-            for dense, (_, segment_features, frame_boundary) in zip(hidden_states, p.imap(mincut_fn, hidden_states)):
-                # K-means
-                intermediate_units = torch.cdist(
-                    torch.from_numpy(segment_features).to(self.quantizer1.device), self.quantizer1
-                ).argmin(1)
-                # Agglomerative clustering on K-means centroids
-                units = self.quantizer2[intermediate_units]
+        for dense in hidden_states:
+            _, segment_features, frame_boundary = mincut_fn(dense)
 
-                dense = torch.from_numpy(dense).to(units.device)
-                frame_boundary = torch.from_numpy(frame_boundary).to(units.device)
-                durations = frame_boundary[:, 1] - frame_boundary[:, 0]
+            # K-means
+            intermediate_units = torch.cdist(segment_features, self.quantizer1).argmin(1)
 
-                # duplicated_units = torch.repeat_interleave(units, durations)
+            # Agglomerative clustering on K-means centroids
+            units = self.quantizer2[intermediate_units]
 
-                outputs.append(
-                    {
-                        "units": units,
-                        "intermediate_units": intermediate_units,
-                        "durations": durations,
-                        "dense": dense,
-                        # "duplicated_units": duplicated_units,
-                    }
-                )
+            durations = frame_boundary[:, 1] - frame_boundary[:, 0]
+
+            if not self.deduplicate:
+                units = torch.repeat_interleave(units, durations)
+                intermediate_units = torch.repeat_interleave(intermediate_units, durations)
+
+            outputs.append(
+                {
+                    "units": units,
+                    "intermediate_units": intermediate_units,
+                    "durations": durations,
+                    "dense": dense,
+                }
+            )
         return outputs
 
     @torch.inference_mode()

@@ -15,8 +15,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from functools import partial
-from multiprocessing import Pool
 from typing import Dict, List, Optional, Tuple, Union
 
 import joblib
@@ -389,18 +387,16 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         """
         outputs = []
 
-        mincut_fn = partial(
-            mincut_torch,
-            sec_per_frame=self.sec_per_frame,
-            sec_per_syllable=sec_per_syllable,
-            merge_threshold=merge_threshold,
-            max_duration=max_duration,
-        )
-
         hidden_states = self.extract_features(input_values, attention_mask)
 
         for dense in hidden_states:
-            _, segment_features, frame_boundary = mincut_fn(dense)
+            _, segment_features, frame_boundary = mincut_torch(
+                dense,
+                sec_per_frame=self.sec_per_frame,
+                sec_per_syllable=sec_per_syllable,
+                merge_threshold=merge_threshold,
+                max_duration=max_duration,
+            )
 
             # K-means
             intermediate_units = torch.cdist(segment_features, self.quantizer1).argmin(1)
@@ -438,9 +434,9 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         process a single long (e.g., 1 hour) speech.
 
         Args:
-            input_values (`torch.FloatTensor` of shape `(batch_size, sequence_length)`):
+            input_values (`torch.FloatTensor` of shape `(1, sequence_length)`):
                 Raw speech waveform.
-            attention_mask (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
+            attention_mask (`torch.LongTensor` of shape `(1, sequence_length)`, *optional*):
                 1: non-mask
                 0: mask
             sec_per_syllable (`float`):
@@ -466,14 +462,6 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
 
         outputs = []
 
-        mincut_fn = partial(
-            mincut_torch,
-            sec_per_frame=self.sec_per_frame,
-            sec_per_syllable=sec_per_syllable,
-            merge_threshold=merge_threshold,
-            max_duration=max_duration,
-        )
-
         if attention_mask is None:
             attention_mask = torch.ones_like(input_values, dtype=torch.long)
 
@@ -496,7 +484,13 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
             hidden_states += self.extract_features(batch_input_values, batch_attention_mask)
 
         for dense in hidden_states:
-            _, segment_features, frame_boundary = mincut_fn(dense)
+            _, segment_features, frame_boundary = mincut_torch(
+                dense,
+                sec_per_frame=self.sec_per_frame,
+                sec_per_syllable=sec_per_syllable,
+                merge_threshold=merge_threshold,
+                max_duration=max_duration,
+            )
 
             # K-means
             intermediate_units = torch.cdist(segment_features, self.quantizer1).argmin(1)

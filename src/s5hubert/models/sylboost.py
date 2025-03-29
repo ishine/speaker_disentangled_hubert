@@ -15,19 +15,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
 from typing import Optional, Tuple, Union
 
 import torch
 from torch import nn
 from transformers.modeling_outputs import SequenceClassifierOutput
 
+from .data2vec2 import Data2VecMultiModel, d2v2_config
 from .modules import init_module
-
-sys.path.append("src/SyllableLM")
-from ...SyllableLM.extract_units import d2v2_config
-from ...SyllableLM.syllablelm.data2vec.data.modality import Modality
-from ...SyllableLM.syllablelm.data2vec.models.data2vec2 import Data2VecMultiModel
 
 
 class SylBoostForSequenceClassification(nn.Module):
@@ -47,9 +42,9 @@ class SylBoostForSequenceClassification(nn.Module):
     ):
         super().__init__()
 
-        d2v2_model = Data2VecMultiModel(d2v2_config, [Modality.AUDIO])
+        d2v2_model = Data2VecMultiModel(d2v2_config)
         state_dict = torch.load(model_name_or_path, weights_only=False)
-        d2v2_model.load_state_dict({k[len("model.") :]: v for k, v in state_dict["model_seg"].items()})
+        d2v2_model.load_state_dict({k[len("model.") :]: v for k, v in state_dict["model_seg"].items()}, strict=False)
 
         self.hubert = d2v2_model
         self.projector = nn.Linear(self.hubert.cfg.embed_dim, classifier_proj_size)
@@ -87,23 +82,19 @@ class SylBoostForSequenceClassification(nn.Module):
             `config.num_labels > 1` a classification loss is computed (Cross-Entropy).
         """
 
-        outputs = self.hubert(
+        hidden_states, padding_mask = self.hubert(
             input_values,
-            mode=Modality.AUDIO.name,
             padding_mask=attention_mask.bool().logical_not(),
-            mask=False,
-            features_only=True,
-            remove_extra_tokens=True,
-            out_layer=self.segmentation_layer,
+            output_layer=self.segmentation_layer,
         )
 
-        hidden_states = outputs["x"]
+        hidden_states = hidden_states[-1]
 
         hidden_states = self.projector(hidden_states)
         if attention_mask is None:
             pooled_output = hidden_states.mean(dim=1)
         else:
-            padding_mask = outputs["padding_mask"].logical_not()
+            padding_mask = padding_mask.logical_not()
             hidden_states[~padding_mask] = 0.0
             pooled_output = hidden_states.sum(dim=1) / padding_mask.sum(dim=1).view(-1, 1)
 

@@ -198,12 +198,22 @@ def mincut_numpy(
     return boundaries, pooled_feat, np.array(seg_boundary_frame_pairs)
 
 
-def mincut_wrapper(ckpt_path, merge_threshold: Optional[float] = 0.3, max_duration: int = 50):
+def mincut_wrapper(
+    ckpt_path,
+    sec_per_frame: float = 0.02,
+    sec_per_syllable: float = 0.2,
+    merge_threshold: Optional[float] = 0.3,
+    max_duration: int = 50,
+):
     ckpt = np.load(ckpt_path, allow_pickle=True)[()]
     hidden_states = ckpt["hidden_states"]  # (n_frames, 768)
 
     boundaries, pooled_feat, frame_boundary = mincut_numpy(
-        hidden_states, merge_threshold=merge_threshold, max_duration=max_duration
+        hidden_states,
+        sec_per_frame=sec_per_frame,
+        sec_per_syllable=sec_per_syllable,
+        merge_threshold=merge_threshold,
+        max_duration=max_duration,
     )
     durations = frame_boundary[:, 1] - frame_boundary[:, 0]
 
@@ -216,6 +226,8 @@ def mincut_wrapper(ckpt_path, merge_threshold: Optional[float] = 0.3, max_durati
 def parallel_mincut(
     ckpt_paths,
     disable_tqdm: bool = True,
+    sec_per_frame: float = 0.02,
+    sec_per_syllable: float = 0.2,
     merge_threshold: Optional[float] = 0.3,
     max_duration: int = 50,
     num_workers: Optional[int] = None,
@@ -223,7 +235,14 @@ def parallel_mincut(
     with Pool(num_workers) as p:
         for _ in tqdm(
             p.imap_unordered(
-                partial(mincut_wrapper, merge_threshold=merge_threshold, max_duration=max_duration), ckpt_paths
+                partial(
+                    mincut_wrapper,
+                    sec_per_frame=sec_per_frame,
+                    sec_per_syllable=sec_per_syllable,
+                    merge_threshold=merge_threshold,
+                    max_duration=max_duration,
+                ),
+                ckpt_paths,
             ),
             desc="minimum cut algorithm",
             total=len(ckpt_paths),

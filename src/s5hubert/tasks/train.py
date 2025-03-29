@@ -53,6 +53,8 @@ def validate(config, model, writer: SummaryWriter, step: int):
     parallel_mincut(
         segment_paths,
         config.common.disable_tqdm,
+        config.mincut.sec_per_frame,
+        config.mincut.sec_per_syllable,
         config.mincut.merge_threshold,
         config.mincut.max_duration,
         config.mincut.num_workers,

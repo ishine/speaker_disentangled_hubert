@@ -24,6 +24,8 @@ def validate(config, model, writer: SummaryWriter, step: int):
     segment_dir = Path(config.path.segment_dir)
     segment_paths = []
 
+    total_seconds = 0
+
     with open(config.dataset.dev_file) as f:
         for n, wav_name in enumerate(f):
             wav_name = wav_name.rstrip()
@@ -42,6 +44,8 @@ def validate(config, model, writer: SummaryWriter, step: int):
             segment_path.parent.mkdir(parents=True, exist_ok=True)
             segment_paths.append(segment_path)
             np.save(segment_path, outputs)
+
+            total_seconds += wav.shape[1] / sr
 
             if n < 10:
                 similarity_mat = hidden_states @ hidden_states.T
@@ -67,6 +71,15 @@ def validate(config, model, writer: SummaryWriter, step: int):
         tolerance=0.05,
         max_val_num=None,
     ).evaluate()
+
+    # calculate the unit frequency
+    num_units = 0
+
+    for segment_path in segment_paths:
+        ckpt = np.load(segment_path, allow_pickle=True)[()]
+        num_units += len(ckpt["segments"])
+
+    results["unit_frequency"] = num_units / total_seconds
 
     for key in results:
         writer.add_scalar(f"dev/{key}", results[key], step)

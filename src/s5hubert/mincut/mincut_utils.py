@@ -8,7 +8,7 @@ import torch
 from tqdm import tqdm
 
 
-def mincut_dp_torch(W: torch.Tensor, num_syllables: int, max_duration: int = 50):
+def mincut_dp_torch(W: torch.Tensor, num_syllables: int, min_duration: int = 1, max_duration: int = 50):
     """
     Args:
         W (`torch.FloatTensor` of shape `(sequence_length, sequence_length)`):
@@ -34,11 +34,20 @@ def mincut_dp_torch(W: torch.Tensor, num_syllables: int, max_duration: int = 50)
     cut = vol - W_sum
     ncut = cut / (cut + W_sum / 2)
 
-    # gather_indices: (max_duration, T)
+    mask = torch.tril(torch.ones_like(ncut, dtype=torch.bool), -2 + min_duration)
+    ncut[mask] = torch.finfo(ncut.dtype).max
+
+    # gather_indices: (max_duration - min_duration + 1, T)
     gather_indices = (
-        torch.as_strided(torch.arange(1 - max_duration, T, device=W.device), (T, max_duration), (1, 1)).clip(0).T
+        torch.as_strided(
+            torch.arange(1 - max_duration, T - min_duration + 1, device=W.device),
+            (T, max_duration - min_duration + 1),
+            (1, 1),
+        )
+        .clip(0)
+        .T
     )
-    ncut = torch.take_along_dim(ncut, gather_indices, 0)  # (max_duration, T)
+    ncut = torch.take_along_dim(ncut, gather_indices, 0)  # (max_duration - min_duration + 1, T)
 
     B = torch.zeros((T + 1, num_syllables + 1), dtype=torch.int)
     C = torch.full((T + 1, num_syllables + 1), torch.finfo(W.dtype).max, device=W.device)
@@ -66,6 +75,7 @@ def mincut_torch(
     sec_per_frame: float = 0.02,
     sec_per_syllable: float = 0.2,
     merge_threshold: Optional[float] = 0.3,
+    min_duration: int = 1,
     max_duration: int = 50,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
@@ -79,7 +89,7 @@ def mincut_torch(
 
     ssm = hidden_states @ hidden_states.T
     ssm = ssm - torch.min(ssm) + 1e-7  # make it non-negative
-    seg_boundary_frame = mincut_dp_torch(ssm, num_syllables, max_duration)
+    seg_boundary_frame = mincut_dp_torch(ssm, num_syllables, min_duration, max_duration)
 
     seg_boundary_frame_pairs = [[l, r] for l, r in zip(seg_boundary_frame[:-1], seg_boundary_frame[1:])]
     pooled_feat = torch.stack([hidden_states[l:r].mean(0) for l, r in seg_boundary_frame_pairs])
@@ -101,7 +111,7 @@ def mincut_torch(
     return boundaries, pooled_feat, torch.tensor(seg_boundary_frame_pairs, device=hidden_states.device)
 
 
-def mincut_dp_numpy(W: np.ndarray, num_syllables: int, max_duration: int = 50):
+def mincut_dp_numpy(W: np.ndarray, num_syllables: int, min_duration: int = 1, max_duration: int = 50):
     """
     Args:
         W (`np.ndarray` of shape `(sequence_length, sequence_length)`):
@@ -128,10 +138,15 @@ def mincut_dp_numpy(W: np.ndarray, num_syllables: int, max_duration: int = 50):
     with np.errstate(invalid="ignore"):
         ncut = cut / (cut + W_sum / 2)
 
-    # gather_indices: (max_duration, T)
-    x = np.arange(1 - max_duration, T)
-    gather_indices = np.lib.stride_tricks.as_strided(x, (T, max_duration), (x.strides[0], x.strides[0])).clip(0).T
-    ncut = np.take_along_axis(ncut, gather_indices, 0)  # (max_duration, T)
+    mask = np.tril(np.ones_like(ncut, dtype=bool), -2 + min_duration)
+    ncut[mask] = np.finfo(ncut.dtype).max
+
+    # gather_indices: (max_duration - min_duration + 1, T)
+    x = np.arange(1 - max_duration, T - min_duration + 1)
+    gather_indices = (
+        np.lib.stride_tricks.as_strided(x, (T, max_duration - min_duration + 1), (x.strides[0], x.strides[0])).clip(0).T
+    )
+    ncut = np.take_along_axis(ncut, gather_indices, 0)  # (max_duration - min_duration + 1, T)
 
     B = np.zeros((T + 1, num_syllables + 1), dtype=np.int32)
     C = np.full((T + 1, num_syllables + 1), np.finfo(W.dtype).max)
@@ -159,6 +174,7 @@ def mincut_numpy(
     sec_per_frame: float = 0.02,
     sec_per_syllable: float = 0.2,
     merge_threshold: Optional[float] = 0.3,
+    min_duration: int = 1,
     max_duration: int = 50,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -168,7 +184,7 @@ def mincut_numpy(
 
     ssm = hidden_states @ hidden_states.T
     ssm = ssm - np.min(ssm) + 1e-7  # make it non-negative
-    seg_boundary_frame = mincut_dp_numpy(ssm, num_syllable, max_duration)
+    seg_boundary_frame = mincut_dp_numpy(ssm, num_syllable, min_duration, max_duration)
 
     seg_boundary_frame_pairs = [[l, r] for l, r in zip(seg_boundary_frame[:-1], seg_boundary_frame[1:])]
     pooled_feat = np.stack([hidden_states[l:r].mean(0) for l, r in seg_boundary_frame_pairs])
@@ -203,16 +219,18 @@ def mincut_wrapper(
     sec_per_frame: float = 0.02,
     sec_per_syllable: float = 0.2,
     merge_threshold: Optional[float] = 0.3,
+    min_duration: int = 1,
     max_duration: int = 50,
 ):
     ckpt = np.load(ckpt_path, allow_pickle=True)[()]
-    hidden_states = ckpt["hidden_states"]  # (n_frames, 768)
+    hidden_states = ckpt["hidden_states"]  # (n_frames, hidden_size)
 
     boundaries, pooled_feat, frame_boundary = mincut_numpy(
         hidden_states,
         sec_per_frame=sec_per_frame,
         sec_per_syllable=sec_per_syllable,
         merge_threshold=merge_threshold,
+        min_duration=min_duration,
         max_duration=max_duration,
     )
     durations = frame_boundary[:, 1] - frame_boundary[:, 0]
@@ -229,6 +247,7 @@ def parallel_mincut(
     sec_per_frame: float = 0.02,
     sec_per_syllable: float = 0.2,
     merge_threshold: Optional[float] = 0.3,
+    min_duration: int = 1,
     max_duration: int = 50,
     num_workers: Optional[int] = None,
 ):
@@ -240,6 +259,7 @@ def parallel_mincut(
                     sec_per_frame=sec_per_frame,
                     sec_per_syllable=sec_per_syllable,
                     merge_threshold=merge_threshold,
+                    min_duration=min_duration,
                     max_duration=max_duration,
                 ),
                 ckpt_paths,

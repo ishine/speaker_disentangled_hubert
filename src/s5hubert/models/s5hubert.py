@@ -359,6 +359,7 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         attention_mask: Optional[torch.Tensor] = None,
         sec_per_syllable: float = 0.2,
         merge_threshold: Optional[float] = 0.3,
+        min_duration: int = 1,
         max_duration: int = 50,
     ) -> List[Dict[str, torch.Tensor]]:
         """
@@ -372,6 +373,8 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
                 Seconds per syllable, used to predefine the number of syllables in the input speech.
             merge_threshold (`float`, *optional*):
                 Merge threshold of the cosine similarity between adjacent syllabic segments.
+            min_duration (`int`):
+                The minimum unit duration, measured in frames.
             max_duration (`int`):
                 The maximum unit duration, measured in frames, before adjacent segment merge.
 
@@ -395,6 +398,7 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
                 sec_per_frame=self.sec_per_frame,
                 sec_per_syllable=sec_per_syllable,
                 merge_threshold=merge_threshold,
+                min_duration=min_duration,
                 max_duration=max_duration,
             )
 
@@ -427,6 +431,7 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         attention_mask: Optional[torch.Tensor] = None,
         sec_per_syllable: float = 0.2,
         merge_threshold: Optional[float] = 0.3,
+        min_duration: int = 1,
         max_duration: int = 50,
         batch_size: int = 16,
     ) -> List[Dict[str, torch.Tensor]]:
@@ -443,6 +448,8 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
                 Seconds per syllable, used to predefine the number of syllables in the input speech.
             merge_threshold (`float`, *optional*):
                 Merge threshold of the cosine similarity between adjacent syllabic segments.
+            min_duration (`int`):
+                The minimum unit duration, measured in frames.
             max_duration (`int`):
                 The maximum unit duration, measured in frames, before adjacent segment merge.
             batch_size (`int`):
@@ -489,6 +496,7 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
                 sec_per_frame=self.sec_per_frame,
                 sec_per_syllable=sec_per_syllable,
                 merge_threshold=merge_threshold,
+                min_duration=min_duration,
                 max_duration=max_duration,
             )
 

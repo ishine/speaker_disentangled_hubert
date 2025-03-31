@@ -35,7 +35,7 @@ def mincut_dp_torch(W: torch.Tensor, num_syllables: int, min_duration: int = 1, 
     ncut = cut / (cut + W_sum / 2)
 
     mask = torch.tril(torch.ones_like(ncut, dtype=torch.bool), -2 + min_duration)
-    ncut[mask] = torch.finfo(ncut.dtype).max
+    ncut[mask] = float("inf")
 
     # gather_indices: (max_duration - min_duration + 1, T)
     gather_indices = (
@@ -139,7 +139,7 @@ def mincut_dp_numpy(W: np.ndarray, num_syllables: int, min_duration: int = 1, ma
         ncut = cut / (cut + W_sum / 2)
 
     mask = np.tril(np.ones_like(ncut, dtype=bool), -2 + min_duration)
-    ncut[mask] = np.finfo(ncut.dtype).max
+    ncut[mask] = float("inf")
 
     # gather_indices: (max_duration - min_duration + 1, T)
     x = np.arange(1 - max_duration, T - min_duration + 1)

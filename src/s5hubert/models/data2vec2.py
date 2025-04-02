@@ -28,112 +28,154 @@ from typing import Callable, Optional
 import numpy as np
 import torch
 from torch import nn
+from transformers import PretrainedConfig, PreTrainedModel
 
 sys.path.append("src/SyllableLM")
-from ...SyllableLM.syllablelm.data2vec.data.modality import Modality
 from ...SyllableLM.syllablelm.data2vec.models.modalities.audio import AudioEncoder
 from ...SyllableLM.syllablelm.data2vec.models.modalities.base import D2vModalityConfig
 from ...SyllableLM.syllablelm.data2vec.models.modalities.modules import AltBlock, BlockEncoder
 
-d2v2_config = SimpleNamespace(
-    **{
-        "_name": "data2vec_multi",
-        "loss_beta": 0.0,
-        "loss_scale": None,
-        "depth": 8,
-        "start_drop_path_rate": 0.0,
-        "end_drop_path_rate": 0.0,
-        "num_heads": 12,
-        "norm_eps": 1e-05,
-        "norm_affine": True,
-        "encoder_dropout": 0.1,
-        "post_mlp_drop": 0.1,
-        "attention_dropout": 0.1,
-        "activation_dropout": 0.0,
-        "dropout_input": 0.0,
-        "layerdrop": 0.05,
-        "embed_dim": 768,
-        "mlp_ratio": 4.0,
-        "layer_norm_first": False,
-        "average_top_k_layers": 8,
-        "end_of_block_targets": False,
-        "clone_batch": 8,
-        "layer_norm_target_layer": False,
-        "batch_norm_target_layer": False,
-        "instance_norm_target_layer": True,
-        "instance_norm_targets": False,
-        "layer_norm_targets": False,
-        "ema_decay": 0.999,
-        "ema_same_dtype": True,
-        "log_norms": True,
-        "ema_end_decay": 0.99999,
-        "ema_anneal_end_step": 75000,
-        "ema_encoder_only": False,
-        "max_update": 400000,
-        "modalities": SimpleNamespace(
-            **{
-                "_name": None,
-                "audio": SimpleNamespace(
-                    **{
-                        "type": Modality.AUDIO,
-                        "prenet_depth": 4,
-                        "prenet_layerdrop": 0.05,
-                        "prenet_dropout": 0.1,
-                        "start_drop_path_rate": 0.0,
-                        "end_drop_path_rate": 0.0,
-                        "num_extra_tokens": 0,
-                        "init_extra_token_zero": True,
-                        "mask_noise_std": 0.01,
-                        "mask_prob_min": None,
-                        "mask_prob": 0.5,
-                        "inverse_mask": False,
-                        "mask_prob_adjust": 0.05,
-                        "keep_masked_pct": 0.0,
-                        "mask_length": 5,
-                        "add_masks": False,
-                        "remove_masks": False,
-                        "mask_dropout": 0.0,
-                        "encoder_zero_mask": True,
-                        "mask_channel_prob": 0.0,
-                        "mask_channel_length": 64,
-                        "ema_local_encoder": False,
-                        "local_grad_mult": 1.0,
-                        "use_alibi_encoder": True,
-                        "alibi_scale": 1.0,
-                        "learned_alibi": False,
-                        "alibi_max_pos": None,
-                        "learned_alibi_scale": False,
-                        "learned_alibi_scale_per_head": True,
-                        "learned_alibi_scale_per_layer": False,
-                        "num_alibi_heads": 12,
-                        "model_depth": 8,
-                        "decoder": None,
-                        "extractor_mode": "layer_norm",
-                        "feature_encoder_spec": "[(512, 10, 5)] + [(512, 3, 2)] * 4 + [(512,2,2)] + [(512,2,2)]",
-                        "conv_pos_width": 95,
-                        "conv_pos_groups": 16,
-                        "conv_pos_depth": 5,
-                        "conv_pos_pre_ln": False,
-                    }
-                ),
+
+class Data2Vec2Config(PretrainedConfig):
+    def __init__(
+        self,
+        _name="data2vec_multi",
+        loss_beta=0.0,
+        loss_scale=None,
+        depth=8,
+        start_drop_path_rate=0.0,
+        end_drop_path_rate=0.0,
+        num_heads=12,
+        norm_eps=1e-05,
+        norm_affine=True,
+        encoder_dropout=0.1,
+        post_mlp_drop=0.1,
+        attention_dropout=0.1,
+        activation_dropout=0.0,
+        dropout_input=0.0,
+        layerdrop=0.05,
+        embed_dim=768,
+        mlp_ratio=4.0,
+        layer_norm_first=False,
+        average_top_k_layers=8,
+        end_of_block_targets=False,
+        clone_batch=8,
+        layer_norm_target_layer=False,
+        batch_norm_target_layer=False,
+        instance_norm_target_layer=True,
+        instance_norm_targets=False,
+        layer_norm_targets=False,
+        ema_decay=0.999,
+        ema_same_dtype=True,
+        log_norms=True,
+        ema_end_decay=0.99999,
+        ema_anneal_end_step=75000,
+        ema_encoder_only=False,
+        max_update=400000,
+        modalities={
+            "audio": {
+                "prenet_depth": 4,
+                "prenet_layerdrop": 0.05,
+                "prenet_dropout": 0.1,
+                "start_drop_path_rate": 0.0,
+                "end_drop_path_rate": 0.0,
+                "num_extra_tokens": 0,
+                "init_extra_token_zero": True,
+                "mask_noise_std": 0.01,
+                "mask_prob_min": None,
+                "mask_prob": 0.5,
+                "inverse_mask": False,
+                "mask_prob_adjust": 0.05,
+                "keep_masked_pct": 0.0,
+                "mask_length": 5,
+                "add_masks": False,
+                "remove_masks": False,
+                "mask_dropout": 0.0,
+                "encoder_zero_mask": True,
+                "mask_channel_prob": 0.0,
+                "mask_channel_length": 64,
+                "ema_local_encoder": False,
+                "local_grad_mult": 1.0,
+                "use_alibi_encoder": True,
+                "alibi_scale": 1.0,
+                "learned_alibi": False,
+                "alibi_max_pos": None,
+                "learned_alibi_scale": False,
+                "learned_alibi_scale_per_head": True,
+                "learned_alibi_scale_per_layer": False,
+                "num_alibi_heads": 12,
+                "model_depth": 8,
+                "decoder": None,
+                "extractor_mode": "layer_norm",
+                "feature_encoder_spec": "[(512, 10, 5)] + [(512, 3, 2)] * 4 + [(512,2,2)] + [(512,2,2)]",
+                "conv_pos_width": 95,
+                "conv_pos_groups": 16,
+                "conv_pos_depth": 5,
+                "conv_pos_pre_ln": False,
             }
-        ),
-        "shared_decoder": None,
-        "min_target_var": 0.1,
-        "min_pred_var": 0.01,
-        "supported_modality": Modality.AUDIO,
-        "mae_init": False,
-        "seed": 1,
-        "skip_ema": False,
-        "cls_loss": 0.0,
-        "recon_loss": 0.0,
-        "d2v_loss": 1.0,
-        "decoder_group": False,
-    }
-)
+        },
+        shared_decoder=None,
+        min_target_var=0.1,
+        min_pred_var=0.01,
+        mae_init=False,
+        seed=1,
+        skip_ema=False,
+        cls_loss=0.0,
+        recon_loss=0.0,
+        d2v_loss=1.0,
+        decoder_group=False,
+        **kwargs,
+    ):
+        self._name = _name
+        self.loss_beta = loss_beta
+        self.loss_scale = loss_scale
+        self.depth = depth
+        self.start_drop_path_rate = start_drop_path_rate
+        self.end_drop_path_rate = end_drop_path_rate
+        self.num_heads = num_heads
+        self.norm_eps = norm_eps
+        self.norm_affine = norm_affine
+        self.encoder_dropout = encoder_dropout
+        self.post_mlp_drop = post_mlp_drop
+        self.attention_dropout = attention_dropout
+        self.activation_dropout = activation_dropout
+        self.dropout_input = dropout_input
+        self.layerdrop = layerdrop
+        self.embed_dim = embed_dim
+        self.mlp_ratio = mlp_ratio
+        self.layer_norm_first = layer_norm_first
+        self.average_top_k_layers = average_top_k_layers
+        self.end_of_block_targets = end_of_block_targets
+        self.clone_batch = clone_batch
+        self.layer_norm_target_layer = layer_norm_target_layer
+        self.batch_norm_target_layer = batch_norm_target_layer
+        self.instance_norm_target_layer = instance_norm_target_layer
+        self.instance_norm_targets = instance_norm_targets
+        self.layer_norm_targets = layer_norm_targets
+        self.ema_decay = ema_decay
+        self.ema_same_dtype = ema_same_dtype
+        self.log_norms = log_norms
+        self.ema_end_decay = ema_end_decay
+        self.ema_anneal_end_step = ema_anneal_end_step
+        self.ema_encoder_only = ema_encoder_only
+        self.max_update = max_update
+        self.modalities = modalities
+        self.shared_decoder = shared_decoder
+        self.min_target_var = min_target_var
+        self.min_pred_var = min_pred_var
+        self.mae_init = mae_init
+        self.seed = seed
+        self.skip_ema = skip_ema
+        self.cls_loss = cls_loss
+        self.recon_loss = recon_loss
+        self.d2v_loss = d2v_loss
+        self.decoder_group = decoder_group
+        super().__init__(**kwargs)
 
 
-class Data2VecMultiModel(nn.Module):
+class Data2VecMultiModel(PreTrainedModel):
+    config_class = Data2Vec2Config
+
     def make_modality_encoder(
         self,
         cfg: D2vModalityConfig,
@@ -154,44 +196,44 @@ class Data2VecMultiModel(nn.Module):
             task,
         )
 
-    def __init__(self, cfg, task=None):
-        super().__init__()
-        self.cfg = cfg
+    def __init__(self, config: Data2Vec2Config, task=None):
+        super().__init__(config)
+        self.config = config
 
-        make_layer_norm = partial(nn.LayerNorm, eps=cfg.norm_eps, elementwise_affine=cfg.norm_affine)
+        make_layer_norm = partial(nn.LayerNorm, eps=config.norm_eps, elementwise_affine=config.norm_affine)
 
         def make_block(drop_path, dim=None, heads=None):
             return AltBlock(
-                cfg.embed_dim if dim is None else dim,
-                cfg.num_heads if heads is None else heads,
-                cfg.mlp_ratio,
+                config.embed_dim if dim is None else dim,
+                config.num_heads if heads is None else heads,
+                config.mlp_ratio,
                 qkv_bias=True,
-                drop=cfg.encoder_dropout,
-                attn_drop=cfg.attention_dropout,
-                mlp_drop=cfg.activation_dropout,
-                post_mlp_drop=cfg.post_mlp_drop,
+                drop=config.encoder_dropout,
+                attn_drop=config.attention_dropout,
+                mlp_drop=config.activation_dropout,
+                post_mlp_drop=config.post_mlp_drop,
                 drop_path=drop_path,
                 norm_layer=make_layer_norm,
-                layer_norm_first=cfg.layer_norm_first,
-                ffn_targets=not cfg.end_of_block_targets,
+                layer_norm_first=config.layer_norm_first,
+                ffn_targets=not config.end_of_block_targets,
             )
 
         self.alibi_biases = {}
         self.modality_encoders = nn.ModuleDict()
-        mod_cfg = getattr(cfg.modalities, "audio")
+        mod_cfg = SimpleNamespace(**config.modalities["audio"])
         self.modality_encoders["AUDIO"] = self.make_modality_encoder(
             mod_cfg,
-            cfg.embed_dim,
+            config.embed_dim,
             make_block,
             make_layer_norm,
-            cfg.layer_norm_first,
+            config.layer_norm_first,
             self.alibi_biases,
             task,
         )
 
-        dpr = np.linspace(cfg.start_drop_path_rate, cfg.end_drop_path_rate, cfg.depth)
+        dpr = np.linspace(config.start_drop_path_rate, config.end_drop_path_rate, config.depth)
 
-        self.blocks = nn.ModuleList([make_block(dpr[i]) for i in range(cfg.depth)])
+        self.blocks = nn.ModuleList([make_block(dpr[i]) for i in range(config.depth)])
 
         for pn, p in self.named_parameters():
             if len(p.shape) == 1 or pn.endswith(".bias") or "alibi_scale" in pn:
@@ -247,7 +289,7 @@ class Data2VecMultiModel(nn.Module):
 
         layer_results = []
         for i, blk in enumerate(self.blocks):
-            if not self.training or self.cfg.layerdrop == 0 or (np.random.random() > self.cfg.layerdrop):
+            if not self.training or self.config.layerdrop == 0 or (np.random.random() > self.config.layerdrop):
                 ab = alibi_bias
                 if ab is not None and alibi_scale is not None:
                     scale = alibi_scale[i] if alibi_scale.size(0) > 1 else alibi_scale.squeeze(0)

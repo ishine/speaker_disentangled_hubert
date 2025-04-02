@@ -21,7 +21,7 @@ import torch
 from torch import nn
 from transformers.modeling_outputs import SequenceClassifierOutput
 
-from .data2vec2 import Data2VecMultiModel, d2v2_config
+from .data2vec2 import Data2Vec2Config, Data2VecMultiModel
 from .modules import init_module
 
 
@@ -42,12 +42,12 @@ class SylBoostForSequenceClassification(nn.Module):
     ):
         super().__init__()
 
-        d2v2_model = Data2VecMultiModel(d2v2_config)
+        d2v2_model = Data2VecMultiModel(Data2Vec2Config())
         state_dict = torch.load(model_name_or_path, weights_only=False)
         d2v2_model.load_state_dict({k[len("model.") :]: v for k, v in state_dict["model_seg"].items()}, strict=False)
 
         self.hubert = d2v2_model
-        self.projector = nn.Linear(self.hubert.cfg.embed_dim, classifier_proj_size)
+        self.projector = nn.Linear(self.hubert.config.embed_dim, classifier_proj_size)
         self.classifier = nn.Linear(classifier_proj_size, num_labels, bias=False)
 
         # Initialize weights and apply final processing

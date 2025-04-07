@@ -8,7 +8,7 @@ import torch
 from tqdm import tqdm
 
 
-def mincut_dp_torch(W: torch.Tensor, num_syllables: int, min_duration: int = 1, max_duration: int = 50):
+def mincut_dp_torch(W: torch.Tensor, num_syllables: int, min_duration: int, max_duration: int):
     """
     Args:
         W (`torch.FloatTensor` of shape `(sequence_length, sequence_length)`):
@@ -75,8 +75,8 @@ def mincut_torch(
     sec_per_frame: float = 0.02,
     sec_per_syllable: float = 0.2,
     merge_threshold: Optional[float] = 0.3,
-    min_duration: int = 1,
-    max_duration: int = 50,
+    min_duration: int = 3,
+    max_duration: int = 35,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     A computationally efficient PyTorch implementation of the exact minimum cut algorithm
@@ -111,7 +111,7 @@ def mincut_torch(
     return boundaries, pooled_feat, torch.tensor(seg_boundary_frame_pairs, device=hidden_states.device)
 
 
-def mincut_dp_numpy(W: np.ndarray, num_syllables: int, min_duration: int = 1, max_duration: int = 50):
+def mincut_dp_numpy(W: np.ndarray, num_syllables: int, min_duration: int, max_duration: int):
     """
     Args:
         W (`np.ndarray` of shape `(sequence_length, sequence_length)`):
@@ -174,8 +174,8 @@ def mincut_numpy(
     sec_per_frame: float = 0.02,
     sec_per_syllable: float = 0.2,
     merge_threshold: Optional[float] = 0.3,
-    min_duration: int = 1,
-    max_duration: int = 50,
+    min_duration: int = 3,
+    max_duration: int = 35,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     from https://github.com/jasonppy/syllable-discovery/blob/master/save_seg_feats_mincut.py#L160
@@ -219,8 +219,8 @@ def mincut_wrapper(
     sec_per_frame: float = 0.02,
     sec_per_syllable: float = 0.2,
     merge_threshold: Optional[float] = 0.3,
-    min_duration: int = 1,
-    max_duration: int = 50,
+    min_duration: int = 3,
+    max_duration: int = 35,
 ):
     ckpt = np.load(ckpt_path, allow_pickle=True)[()]
     hidden_states = ckpt["hidden_states"]  # (n_frames, hidden_size)
@@ -247,8 +247,8 @@ def parallel_mincut(
     sec_per_frame: float = 0.02,
     sec_per_syllable: float = 0.2,
     merge_threshold: Optional[float] = 0.3,
-    min_duration: int = 1,
-    max_duration: int = 50,
+    min_duration: int = 3,
+    max_duration: int = 35,
     num_workers: Optional[int] = None,
 ):
     with Pool(num_workers) as p:

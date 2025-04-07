@@ -359,8 +359,8 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         attention_mask: Optional[torch.Tensor] = None,
         sec_per_syllable: float = 0.2,
         merge_threshold: Optional[float] = 0.3,
-        min_duration: int = 1,
-        max_duration: int = 50,
+        min_duration: int = 3,
+        max_duration: int = 35,
     ) -> List[Dict[str, torch.Tensor]]:
         """
         Args:
@@ -431,8 +431,8 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         attention_mask: Optional[torch.Tensor] = None,
         sec_per_syllable: float = 0.2,
         merge_threshold: Optional[float] = 0.3,
-        min_duration: int = 1,
-        max_duration: int = 50,
+        min_duration: int = 3,
+        max_duration: int = 35,
         batch_size: int = 16,
     ) -> List[Dict[str, torch.Tensor]]:
         """

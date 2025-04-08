@@ -1,0 +1,14 @@
+path:
+  checkpoint: "models/sylboost/SylBoost_625Hz.pth"
+  quantizer1: "models/sylboost/SylBoost_625Hz_kmeans.npy"
+  quantizer2: "models/sylboost/SylBoost_625Hz_agglom.npy"
+
+dataset:
+  root: "data" # ${root}/LibriSpeech/train-clean-100, train-clean-360, ...
+
+dataloader:
+  num_workers: 30
+
+model:
+  model_type: "sylboost"
+  model_key: "6.25Hz"

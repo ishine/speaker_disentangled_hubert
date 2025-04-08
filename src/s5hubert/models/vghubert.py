@@ -18,7 +18,7 @@
 import pickle
 import warnings
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 import joblib
 import numpy as np
@@ -147,7 +147,7 @@ class VGHubertForSequenceClassification(nn.Module):
         self,
         input_values: torch.Tensor,
         attention_mask: torch.Tensor,
-        labels: Optional[torch.Tensor] = None,
+        labels: torch.Tensor | None = None,
     ) -> SequenceClassifierOutput:
         r"""
         labels (`torch.LongTensor` of shape `(batch_size,)`, *optional*):

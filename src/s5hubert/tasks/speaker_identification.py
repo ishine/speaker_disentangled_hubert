@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Optional
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -25,7 +24,7 @@ MODELS = {
 
 
 @torch.inference_mode()
-def evaluate(config, data_loader, model, writer: Optional[SummaryWriter] = None, epoch: Optional[int] = None):
+def evaluate(config, data_loader, model, writer: SummaryWriter | None = None, epoch: int | None = None):
     model.eval()
     accuracy = 0
 

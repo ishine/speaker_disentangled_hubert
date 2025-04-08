@@ -1,6 +1,7 @@
 import fire
 from omegaconf import OmegaConf
 
+from src.s5hubert.tasks.calc_ued import calc_ued
 from src.s5hubert.tasks.clustering import clustering
 from src.s5hubert.tasks.eval import evaluate
 from src.s5hubert.tasks.layerwise_analysis import layerwise_analysis
@@ -33,6 +34,10 @@ class TaskRunner:
     def layerwise_analysis(self, config: str = "configs/speech2unit/default.yaml"):
         config = OmegaConf.load(config)
         layerwise_analysis(config)
+
+    def calc_ued(self, config: str = "configs/speech2unit/default.yaml"):
+        config = OmegaConf.load(config)
+        calc_ued(config)
 
     def __call__(self, config: str = "configs/speech2unit/default.yaml"):
         config = OmegaConf.load(config)

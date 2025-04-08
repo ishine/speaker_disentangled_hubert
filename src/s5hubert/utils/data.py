@@ -1,6 +1,6 @@
 import random
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict
 
 import librosa
 import numpy as np
@@ -14,11 +14,11 @@ from .nansy import _load_waveform, change_gender, random_eq
 class LibriSpeech(torchaudio.datasets.LIBRISPEECH):
     def __init__(
         self,
-        root: Union[str, Path] = "data",
+        root: str | Path = "data",
         url: str = "train-clean-100",
         folder_in_archive: str = "LibriSpeech",
         download: bool = False,
-        max_sample_size: Optional[int] = 80080,
+        max_sample_size: int | None = 80080,
     ):
         super().__init__(root, url, folder_in_archive, download)
         self.max_sample_size = max_sample_size
@@ -71,11 +71,11 @@ class LibriSpeech(torchaudio.datasets.LIBRISPEECH):
 class VoxCeleb(torchaudio.datasets.VoxCeleb1Identification):
     def __init__(
         self,
-        root: Union[str, Path] = "data/VoxCeleb1",
+        root: str | Path = "data/VoxCeleb1",
         subset: str = "train",
         meta_url: str = "https://www.robots.ox.ac.uk/~vgg/data/voxceleb/meta/iden_split.txt",
         download: bool = False,
-        max_sample_size: Optional[int] = 128000,
+        max_sample_size: int | None = 128000,
     ):
         super().__init__(root, subset, meta_url, download)
         self.max_sample_size = max_sample_size

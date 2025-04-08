@@ -1,7 +1,7 @@
 import math
 from functools import partial
 from multiprocessing import Pool
-from typing import Optional, Tuple
+from typing import Tuple
 
 import numpy as np
 import torch
@@ -74,7 +74,7 @@ def mincut_torch(
     hidden_states: torch.Tensor,
     sec_per_frame: float = 0.02,
     sec_per_syllable: float = 0.2,
-    merge_threshold: Optional[float] = 0.3,
+    merge_threshold: float | None = 0.3,
     min_duration: int = 3,
     max_duration: int = 35,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -173,7 +173,7 @@ def mincut_numpy(
     hidden_states: np.ndarray,
     sec_per_frame: float = 0.02,
     sec_per_syllable: float = 0.2,
-    merge_threshold: Optional[float] = 0.3,
+    merge_threshold: float | None = 0.3,
     min_duration: int = 3,
     max_duration: int = 35,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -218,7 +218,7 @@ def mincut_wrapper(
     ckpt_path,
     sec_per_frame: float = 0.02,
     sec_per_syllable: float = 0.2,
-    merge_threshold: Optional[float] = 0.3,
+    merge_threshold: float | None = 0.3,
     min_duration: int = 3,
     max_duration: int = 35,
 ):
@@ -246,10 +246,10 @@ def parallel_mincut(
     disable_tqdm: bool = True,
     sec_per_frame: float = 0.02,
     sec_per_syllable: float = 0.2,
-    merge_threshold: Optional[float] = 0.3,
+    merge_threshold: float | None = 0.3,
     min_duration: int = 3,
     max_duration: int = 35,
-    num_workers: Optional[int] = None,
+    num_workers: int | None = None,
 ):
     with Pool(num_workers) as p:
         for _ in tqdm(

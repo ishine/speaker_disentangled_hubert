@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Tuple
+from typing import Tuple
 
 import torch
 from torch import nn
@@ -90,8 +90,8 @@ class S5HubertDino(nn.Module):
         self,
         teacher_input_values: torch.Tensor,
         student_input_values: torch.Tensor,
-        teacher_attention_mask: Optional[torch.Tensor] = None,
-        student_attention_mask: Optional[torch.Tensor] = None,
+        teacher_attention_mask: torch.Tensor | None = None,
+        student_attention_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         # enable dropout
         self.student.feature_projection.train()
@@ -113,8 +113,8 @@ class S5HubertDino(nn.Module):
     def student_forward(
         self,
         input_values: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-    ) -> Tuple[Tuple[torch.Tensor], Optional[torch.Tensor]]:
+        attention_mask: torch.Tensor | None = None,
+    ) -> Tuple[Tuple[torch.Tensor], torch.Tensor | None]:
         extract_features = self.student.feature_extractor(input_values)
         extract_features = extract_features.transpose(1, 2)
 
@@ -162,8 +162,8 @@ class S5HubertDino(nn.Module):
     def teacher_forward(
         self,
         input_values: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-    ) -> Tuple[Tuple[torch.Tensor], Optional[torch.Tensor]]:
+        attention_mask: torch.Tensor | None = None,
+    ) -> Tuple[Tuple[torch.Tensor], torch.Tensor | None]:
         extract_features = self.student.feature_extractor(input_values)
         extract_features = extract_features.transpose(1, 2)
 

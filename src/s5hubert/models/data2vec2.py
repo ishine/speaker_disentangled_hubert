@@ -23,7 +23,7 @@
 import sys
 from functools import partial
 from types import SimpleNamespace
-from typing import Callable, Optional
+from typing import Callable
 
 import numpy as np
 import torch
@@ -242,8 +242,8 @@ class Data2VecMultiModel(PreTrainedModel):
     def forward(
         self,
         source: torch.Tensor,
-        padding_mask: Optional[torch.Tensor] = None,
-        output_layer: Optional[int] = None,
+        padding_mask: torch.Tensor | None = None,
+        output_layer: int | None = None,
     ):
         feature_extractor = self.modality_encoders["AUDIO"]
 

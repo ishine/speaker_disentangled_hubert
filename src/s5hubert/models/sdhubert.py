@@ -16,7 +16,7 @@
 # limitations under the License.
 
 import sys
-from typing import Optional, Tuple, Union
+from typing import Tuple
 
 import torch
 from torch import nn
@@ -60,7 +60,7 @@ class SDHubertForSequenceClassification(nn.Module):
         """
         self.hubert.requires_grad_(False)
 
-    def _get_feat_extract_output_lengths(self, input_lengths: Union[torch.LongTensor, int]):
+    def _get_feat_extract_output_lengths(self, input_lengths: torch.LongTensor | int):
         """
         Computes the output length of the convolutional layers
         """
@@ -80,9 +80,9 @@ class SDHubertForSequenceClassification(nn.Module):
     def forward(
         self,
         input_values: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        labels: Optional[torch.Tensor] = None,
-    ) -> Union[Tuple, SequenceClassifierOutput]:
+        attention_mask: torch.Tensor | None = None,
+        labels: torch.Tensor | None = None,
+    ) -> Tuple | SequenceClassifierOutput:
         r"""
         labels (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
             Labels for computing the sequence classification/regression loss. Indices should be in `[0, ...,

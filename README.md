@@ -1,7 +1,7 @@
 # S5-HuBERT: Self-Supervised Speaker-Separated Syllable HuBERT
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10-blue.svg)](https://www.python.org)
+[![Python](https://img.shields.io/badge/python-3.10-blue.svg)](https://www.python.org)
 [![colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ryota-komatsu/speaker_disentangled_hubert/blob/main/demo.ipynb)
 [![arXiv](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://arxiv.org/abs/2409.10103)
 [![model](https://img.shields.io/badge/%F0%9F%A4%97-Models-blue)](https://huggingface.co/ryota-komatsu/s5-hubert)

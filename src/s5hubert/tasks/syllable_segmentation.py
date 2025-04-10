@@ -4,6 +4,7 @@ import numpy as np
 import torchaudio
 from tqdm import tqdm
 
+from ...sylber.sylber import Segmenter
 from ..mincut.mincut_utils import parallel_mincut
 from ..models.hubert import HubertForSyllableDiscovery
 from ..models.s5hubert import S5HubertForSyllableDiscovery
@@ -28,6 +29,8 @@ def syllable_segmentation(config):
             quantizer2_path=None,
             segmentation_layer=config.model.segmentation_layer,
         ).cuda()
+    elif config.model.model_type == "sylber":
+        model = Segmenter(config.path.checkpoint)
     else:
         return
 
@@ -48,10 +51,15 @@ def syllable_segmentation(config):
                 wav_path = wav_dir / wav_name
                 wav_path = str(wav_path)  # for sox backend
                 wav, sr = torchaudio.load(wav_path)
-                wav = wav.cuda()
 
-                hidden_states = model.get_hidden_states(wav).cpu().numpy()
-                outputs = {"hidden_states": hidden_states}
+                if config.model.model_type != "sylber":
+                    wav = wav.cuda()
+                    hidden_states = model.get_hidden_states(wav).cpu().numpy()
+                    outputs = {"hidden_states": hidden_states}
+                else:
+                    wav = wav.squeeze(0).numpy()
+                    segment_features = model(wav=wav)["segment_features"]
+                    outputs = {"segment_features": segment_features}
 
                 # save hidden states
                 segment_name = wav_name.replace(".flac", ".npy")
@@ -60,13 +68,14 @@ def syllable_segmentation(config):
                 segment_paths.append(segment_path)
                 np.save(segment_path, outputs)
 
-    parallel_mincut(
-        segment_paths,
-        config.common.disable_tqdm,
-        config.mincut.sec_per_frame,
-        config.mincut.sec_per_syllable,
-        config.mincut.merge_threshold,
-        config.mincut.min_duration,
-        config.mincut.max_duration,
-        config.mincut.num_workers,
-    )
+    if config.model.model_type != "sylber":
+        parallel_mincut(
+            segment_paths,
+            config.common.disable_tqdm,
+            config.mincut.sec_per_frame,
+            config.mincut.sec_per_syllable,
+            config.mincut.merge_threshold,
+            config.mincut.min_duration,
+            config.mincut.max_duration,
+            config.mincut.num_workers,
+        )

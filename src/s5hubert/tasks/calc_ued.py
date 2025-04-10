@@ -8,6 +8,7 @@ from torch.utils.data import ConcatDataset
 from torchaudio.functional import edit_distance
 from tqdm import tqdm
 
+from ...sylber.sylber import Segmenter
 from ..models.hubert import HubertForSyllableDiscovery
 from ..models.s5hubert import S5HubertForSyllableDiscovery
 from ..models.vghubert import VGHubertForSyllableDiscovery
@@ -31,6 +32,10 @@ def calc_ued(config):
             config.path.checkpoint,
             config.path.quantizer1,
             config.path.quantizer2,
+            sec_per_syllable=config.mincut.sec_per_syllable,
+            merge_threshold=config.mincut.merge_threshold,
+            min_duration=config.mincut.min_duration,
+            max_duration=config.mincut.max_duration,
         ).cuda()
     elif config.model.model_type == "sdhubert":
         with warnings.catch_warnings():
@@ -59,6 +64,10 @@ def calc_ued(config):
             config.path.quantizer2,
             config.model.model_key,
         )
+    elif config.model.model_type == "sylber":
+        model = Segmenter(config.path.checkpoint)
+        quantizer1 = joblib.load(config.path.quantizer1)
+        quantizer2 = np.load(config.path.quantizer2)
     else:
         return
 
@@ -84,20 +93,12 @@ def calc_ued(config):
             ref = model(
                 input_values=batch["teacher_input_values"].cuda(),
                 attention_mask=batch["teacher_attention_mask"].cuda(),
-                sec_per_syllable=config.mincut.sec_per_syllable,
-                merge_threshold=config.mincut.merge_threshold,
-                min_duration=config.mincut.min_duration,
-                max_duration=config.mincut.max_duration,
             )[0]["units"]
 
             # speaker perturbation
             hyp = model(
                 input_values=batch["student_input_values"].cuda(),
                 attention_mask=batch["student_attention_mask"].cuda(),
-                sec_per_syllable=config.mincut.sec_per_syllable,
-                merge_threshold=config.mincut.merge_threshold,
-                min_duration=config.mincut.min_duration,
-                max_duration=config.mincut.max_duration,
             )[0]["units"]
         elif config.model.model_type == "sdhubert":
             ref = mincut(**segmenter(batch["teacher_input_values"].squeeze(0).numpy()))
@@ -110,6 +111,11 @@ def calc_ued(config):
         elif config.model.model_type == "sylboost":
             ref = model.forward(batch["teacher_input_values"].cuda())["clusters_with_times"][0][0]
             hyp = model.forward(batch["student_input_values"].cuda())["clusters_with_times"][0][0]
+        elif config.model.model_type == "sylber":
+            ref = model(wav=batch["teacher_input_values"].squeeze(0).numpy())
+            hyp = model(wav=batch["student_input_values"].squeeze(0).numpy())
+            ref = quantizer2[quantizer1.predict(ref["segment_features"])]
+            hyp = quantizer2[quantizer1.predict(hyp["segment_features"])]
 
         # unit edit distance (UED)
         # https://arxiv.org/abs/2209.15483

@@ -249,14 +249,33 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         seed: int = 0,
         max_chunk: int = 400080,  # 25 seconds
         deduplicate: bool = True,
+        sec_per_syllable: float = 0.2,
+        merge_threshold: float | None = 0.3,
+        min_duration: int = 3,
+        max_duration: int = 35,
     ):
+        """
+        Args:
+            sec_per_syllable (`float`):
+                Seconds per syllable, used to predefine the number of syllables in the input speech.
+            merge_threshold (`float`, *optional*):
+                Merge threshold of the cosine similarity between adjacent syllabic segments.
+            min_duration (`int`):
+                The minimum unit duration, measured in frames.
+            max_duration (`int`):
+                The maximum unit duration, measured in frames, before adjacent segment merge.
+        """
         super().__init__(config)
         self.segmentation_layer = segmentation_layer
         self.n_units_step1 = n_units_step1
         self.n_units_step2 = n_units_step2
-        self.sec_per_frame = np.prod(config.conv_stride) / 16000
         self.max_chunk = max_chunk
         self.deduplicate = deduplicate
+        self.sec_per_frame = np.prod(config.conv_stride) / 16000
+        self.sec_per_syllable = sec_per_syllable
+        self.merge_threshold = merge_threshold
+        self.min_duration = min_duration
+        self.max_duration = max_duration
 
         self.hubert = HubertModel(config)
         self.hubert.eval()
@@ -267,7 +286,7 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         fix_random_seed(seed)
 
     @classmethod
-    def load_pretrained(cls, model_path, quantizer1_path, quantizer2_path) -> "S5HubertForSyllableDiscovery":
+    def load_pretrained(cls, model_path, quantizer1_path, quantizer2_path, **kwargs) -> "S5HubertForSyllableDiscovery":
         """
         huggingface-cli login
         python
@@ -281,7 +300,7 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         )
         model.push_to_hub("s5-hubert", private=True)
         """
-        model = cls.from_pretrained(model_path)
+        model = cls.from_pretrained(model_path, **kwargs)
         model.quantizer1 = torch.from_numpy(joblib.load(quantizer1_path).cluster_centers_)
         model.quantizer2 = torch.from_numpy(np.load(quantizer2_path))
         return model
@@ -357,10 +376,6 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         self,
         input_values: torch.Tensor,
         attention_mask: torch.Tensor | None = None,
-        sec_per_syllable: float = 0.2,
-        merge_threshold: float | None = 0.3,
-        min_duration: int = 3,
-        max_duration: int = 35,
     ) -> List[Dict[str, torch.Tensor]]:
         """
         Args:
@@ -369,14 +384,6 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
             attention_mask (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
                 1: non-mask
                 0: mask
-            sec_per_syllable (`float`):
-                Seconds per syllable, used to predefine the number of syllables in the input speech.
-            merge_threshold (`float`, *optional*):
-                Merge threshold of the cosine similarity between adjacent syllabic segments.
-            min_duration (`int`):
-                The minimum unit duration, measured in frames.
-            max_duration (`int`):
-                The maximum unit duration, measured in frames, before adjacent segment merge.
 
         Returns:
             units (`torch.LongTensor`):
@@ -396,10 +403,10 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
             _, segment_features, frame_boundary = mincut_torch(
                 dense,
                 sec_per_frame=self.sec_per_frame,
-                sec_per_syllable=sec_per_syllable,
-                merge_threshold=merge_threshold,
-                min_duration=min_duration,
-                max_duration=max_duration,
+                sec_per_syllable=self.sec_per_syllable,
+                merge_threshold=self.merge_threshold,
+                min_duration=self.min_duration,
+                max_duration=self.max_duration,
             )
 
             # K-means
@@ -429,10 +436,6 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         self,
         input_values: torch.Tensor,
         attention_mask: torch.Tensor | None = None,
-        sec_per_syllable: float = 0.2,
-        merge_threshold: float | None = 0.3,
-        min_duration: int = 3,
-        max_duration: int = 35,
         batch_size: int = 16,
     ) -> List[Dict[str, torch.Tensor]]:
         """
@@ -444,14 +447,6 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
             attention_mask (`torch.LongTensor` of shape `(1, sequence_length)`, *optional*):
                 1: non-mask
                 0: mask
-            sec_per_syllable (`float`):
-                Seconds per syllable, used to predefine the number of syllables in the input speech.
-            merge_threshold (`float`, *optional*):
-                Merge threshold of the cosine similarity between adjacent syllabic segments.
-            min_duration (`int`):
-                The minimum unit duration, measured in frames.
-            max_duration (`int`):
-                The maximum unit duration, measured in frames, before adjacent segment merge.
             batch_size (`int`):
                 Batch size.
 
@@ -494,10 +489,10 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
             _, segment_features, frame_boundary = mincut_torch(
                 dense,
                 sec_per_frame=self.sec_per_frame,
-                sec_per_syllable=sec_per_syllable,
-                merge_threshold=merge_threshold,
-                min_duration=min_duration,
-                max_duration=max_duration,
+                sec_per_syllable=self.sec_per_syllable,
+                merge_threshold=self.merge_threshold,
+                min_duration=self.min_duration,
+                max_duration=self.max_duration,
             )
 
             # K-means

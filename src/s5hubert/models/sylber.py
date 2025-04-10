@@ -22,6 +22,8 @@ import torch
 from torch import nn
 from transformers.modeling_outputs import SequenceClassifierOutput
 
+warnings.simplefilter("ignore", FutureWarning)
+
 from ...sylber.sylber import Segmenter
 from .modules import init_module
 
@@ -36,9 +38,7 @@ class SylberForSequenceClassification(nn.Module):
     ):
         super().__init__()
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            self.hubert = Segmenter(model_ckpt=model_name_or_path).speech_model
+        self.hubert = Segmenter(model_ckpt=model_name_or_path).speech_model
 
         self.projector = nn.Linear(self.hubert.config.hidden_size, classifier_proj_size)
         self.classifier = nn.Linear(classifier_proj_size, num_labels, bias=False)

@@ -76,8 +76,7 @@ def syllable_segmentation(config):
                     }
                 elif config.model.model_type == "sylber":
                     wav = wav.squeeze(0).numpy()
-                    segment_features = model(wav=wav)["segment_features"]
-                    outputs = {"segment_features": segment_features}
+                    outputs = model(wav=wav)
 
                 # save hidden states
                 segment_name = wav_name.replace(".flac", ".npy")

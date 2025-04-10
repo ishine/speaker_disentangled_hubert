@@ -25,4 +25,4 @@ python extract_segments.py \
 
 cd -
 
-python main.py evaluate --config configs/sdhubert.yaml
+python main.py evaluate --config configs/speech2unit/sdhubert.yaml

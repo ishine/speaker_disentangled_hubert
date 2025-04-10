@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -9,6 +10,9 @@ from ..mincut.mincut_utils import parallel_mincut
 from ..models.hubert import HubertForSyllableDiscovery
 from ..models.s5hubert import S5HubertForSyllableDiscovery
 from ..models.vghubert import VGHubertForSyllableDiscovery
+
+sys.path.append("src/SyllableLM")
+from ...SyllableLM.extract_units import SylBoostFeatureReader
 
 MODELS = {
     "hubert": HubertForSyllableDiscovery,
@@ -29,6 +33,13 @@ def syllable_segmentation(config):
             quantizer2_path=None,
             segmentation_layer=config.model.segmentation_layer,
         ).cuda()
+    elif config.model.model_type == "sylboost":
+        model = SylBoostFeatureReader(
+            config.path.checkpoint,
+            config.path.quantizer1,
+            config.path.quantizer2,
+            config.model.model_key,
+        )
     elif config.model.model_type == "sylber":
         model = Segmenter(config.path.checkpoint)
     else:
@@ -52,11 +63,18 @@ def syllable_segmentation(config):
                 wav_path = str(wav_path)  # for sox backend
                 wav, sr = torchaudio.load(wav_path)
 
-                if config.model.model_type != "sylber":
+                if config.model.model_type.startswith("s5hubert") or config.model.model_type in MODELS:
                     wav = wav.cuda()
                     hidden_states = model.get_hidden_states(wav).cpu().numpy()
                     outputs = {"hidden_states": hidden_states}
-                else:
+                elif config.model.model_type == "sylboost":
+                    wav = wav.cuda()
+                    outputs = model.forward(wav)
+                    outputs = {
+                        "segments": outputs["clusters_with_times"][0][1:].T * config.mincut.sec_per_frame,
+                        "units": outputs["clusters_with_times"][0][0],
+                    }
+                elif config.model.model_type == "sylber":
                     wav = wav.squeeze(0).numpy()
                     segment_features = model(wav=wav)["segment_features"]
                     outputs = {"segment_features": segment_features}
@@ -68,7 +86,7 @@ def syllable_segmentation(config):
                 segment_paths.append(segment_path)
                 np.save(segment_path, outputs)
 
-    if config.model.model_type != "sylber":
+    if config.model.model_type.startswith("s5hubert") or config.model.model_type in MODELS:
         parallel_mincut(
             segment_paths,
             config.common.disable_tqdm,

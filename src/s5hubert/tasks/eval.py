@@ -19,8 +19,9 @@ def evaluate(config):
         dataset = json.load(f)
 
     # load clustering model
-    quantizer1 = torch.from_numpy(joblib.load(config.path.quantizer1).cluster_centers_).cuda()
-    quantizer2 = torch.from_numpy(np.load(config.path.quantizer2)).cuda()
+    if config.model.model_type != "sylboost":
+        quantizer1 = torch.from_numpy(joblib.load(config.path.quantizer1).cluster_centers_).cuda()
+        quantizer2 = torch.from_numpy(np.load(config.path.quantizer2)).cuda()
 
     matching_counter = Counter()
     syllable_counter = Counter()
@@ -47,8 +48,11 @@ def evaluate(config):
 
         # syllables
         ref_syllables = np.array([re.sub("[0-3]", "", ref["label"]) for ref in sample["syllables"]])
-        hyp_syllables = torch.cdist(torch.from_numpy(ckpt["segment_features"]).cuda(), quantizer1).argmin(1)
-        hyp_syllables = quantizer2[hyp_syllables].cpu().numpy()
+        if config.model.model_type != "sylboost":
+            hyp_syllables = torch.cdist(torch.from_numpy(ckpt["segment_features"]).cuda(), quantizer1).argmin(1)
+            hyp_syllables = quantizer2[hyp_syllables].cpu().numpy()
+        else:
+            hyp_syllables = ckpt["units"]
 
         matching_counter.update(zip(ref_syllables[ref_indices], hyp_syllables[hyp_indices]))
         syllable_counter.update(ref_syllables[ref_indices])

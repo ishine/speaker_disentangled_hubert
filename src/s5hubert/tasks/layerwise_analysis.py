@@ -95,5 +95,5 @@ def layerwise_analysis(config):
     plt.xticks(range(1, 1 + model.config.num_hidden_layers), fontsize=14)
     plt.yticks(fontsize=14)
     plt.xlabel(r"Transformer encoder layer $l$", fontsize=16)
-    plt.ylabel("Segmentation scores [\%]", fontsize=16)
+    plt.ylabel("Segmentation scores", fontsize=16)
     plt.savefig(result_dir / "layer-wise.pdf", bbox_inches="tight")

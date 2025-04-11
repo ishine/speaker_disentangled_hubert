@@ -12,4 +12,4 @@ then
     tar -xvf models/vg-hubert_3.tar -C models
 fi
 
-python main.py --config configs/vghubert.yaml
+python main.py --config configs/speech2unit/vghubert.yaml

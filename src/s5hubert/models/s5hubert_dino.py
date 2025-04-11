@@ -19,7 +19,7 @@ from typing import Tuple
 
 import torch
 from torch import nn
-from transformers.models.hubert.modeling_hubert import HubertEncoderLayer, HubertModel
+from transformers import AutoModel
 
 from .modules import DINOHead, DINOLoss, init_module
 
@@ -41,7 +41,7 @@ class S5HubertDino(nn.Module):
         self.ema_decay = ema_decay
         self.init_last_layer = init_last_layer
 
-        self.student = HubertModel.from_pretrained(model_name_or_path, weights_only=False)
+        self.student = AutoModel.from_pretrained(model_name_or_path, weights_only=False)
         self.student_head = DINOHead(
             self.student.config.hidden_size,
             head_out_size,
@@ -64,7 +64,10 @@ class S5HubertDino(nn.Module):
         head_bottleneck_size: int = 256,
     ):
         self.teacher_encoder_layers = nn.ModuleList(
-            [HubertEncoderLayer(self.student.config) for _ in range(self.student.config.num_hidden_layers)]
+            [
+                self.student.encoder.layers[0].__class__(self.student.config)
+                for _ in range(self.student.config.num_hidden_layers)
+            ]
         )
         self.teacher_encoder_layers.load_state_dict(self.student.encoder.layers.state_dict())
         self.teacher_encoder_layers.requires_grad_(False)
@@ -125,6 +128,8 @@ class S5HubertDino(nn.Module):
             feature_vector_attention_mask = attention_mask
 
         hidden_states = self.student.feature_projection(extract_features)
+        if isinstance(hidden_states, tuple):
+            hidden_states = hidden_states[0]
 
         all_hidden_states = ()
 
@@ -174,6 +179,8 @@ class S5HubertDino(nn.Module):
             feature_vector_attention_mask = attention_mask
 
         hidden_states = self.student.feature_projection(extract_features)
+        if isinstance(hidden_states, tuple):
+            hidden_states = hidden_states[0]
 
         all_hidden_states = ()
 

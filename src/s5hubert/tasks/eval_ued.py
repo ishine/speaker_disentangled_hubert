@@ -26,7 +26,7 @@ MODELS = {
 }
 
 
-def calc_ued(config):
+def eval_ued(config):
     if config.model.model_type.startswith("s5hubert"):
         model = S5HubertForSyllableDiscovery.load_pretrained(
             config.path.checkpoint,

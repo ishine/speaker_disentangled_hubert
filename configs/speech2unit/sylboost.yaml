@@ -23,8 +23,8 @@ model:
   model_type: "sylboost"
   model_key: "6.25Hz"
 
-n_clusters:
-  step2: 8192
+quantizer:
+  n_clusters2: 8192
 
 mincut:
   sec_per_frame: 0.02

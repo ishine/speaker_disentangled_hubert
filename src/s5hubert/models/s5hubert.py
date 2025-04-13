@@ -408,7 +408,7 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         hidden_states = self.extract_features(input_values, attention_mask)
 
         for dense in hidden_states:
-            _, segment_features, frame_boundary = mincut_torch(
+            segments, segment_features, frame_boundary = mincut_torch(
                 dense,
                 sec_per_frame=self.sec_per_frame,
                 sec_per_syllable=self.sec_per_syllable,
@@ -435,6 +435,8 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
                     "intermediate_units": intermediate_units,
                     "durations": durations,
                     "dense": dense,
+                    "segments": segments,
+                    "segment_features": segment_features,
                 }
             )
         return outputs

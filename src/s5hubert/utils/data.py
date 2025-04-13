@@ -19,9 +19,11 @@ class LibriSpeech(torchaudio.datasets.LIBRISPEECH):
         folder_in_archive: str = "LibriSpeech",
         download: bool = False,
         max_sample_size: int | None = 80080,
+        perturb: bool = True,
     ):
         super().__init__(root, url, folder_in_archive, download)
         self.max_sample_size = max_sample_size
+        self.perturb = perturb
 
     def __getitem__(self, n: int) -> Dict[str, Any]:
         metadata = self.get_metadata(n)
@@ -34,12 +36,15 @@ class LibriSpeech(torchaudio.datasets.LIBRISPEECH):
                 start = random.randrange(diff)
                 teacher_input_values = teacher_input_values[start : start + self.max_sample_size]
 
-        student_input_values = self.perturb_waveform(teacher_input_values, metadata[1])
+        student_input_values = (
+            self.perturb_waveform(teacher_input_values, metadata[1]) if self.perturb else teacher_input_values
+        )
 
         return {
             "teacher_input_values": torch.from_numpy(teacher_input_values),
             "student_input_values": torch.from_numpy(student_input_values),
             "spk_id": metadata[3],
+            "wav_name": metadata[0],
         }
 
     def perturb_waveform(self, waveform: np.ndarray, sr: int = 16000) -> np.ndarray:
@@ -60,11 +65,14 @@ class LibriSpeech(torchaudio.datasets.LIBRISPEECH):
         teacher_attention_mask = pad_sequence(teacher_attention_mask, batch_first=True)
         student_attention_mask = pad_sequence(student_attention_mask, batch_first=True)
 
+        wav_names = [item["wav_name"] for item in batch]
+
         return {
             "teacher_input_values": teacher_input_values,
             "student_input_values": student_input_values,
             "teacher_attention_mask": teacher_attention_mask,
             "student_attention_mask": student_attention_mask,
+            "wav_names": wav_names,
         }
 
 

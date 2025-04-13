@@ -90,7 +90,7 @@ dataset.root in a config file
 python main.py --config configs/speech2unit/default.yaml
 ```
 
-To run only a sub-task (train, syllable_segmentation, clustering, or evaluate), specify it as an argument.
+To run only a sub-task (train, syllable_segmentation, quantize, or evaluate), specify it as an argument.
 
 ```shell
 python main.py train --config configs/speech2unit/default.yaml

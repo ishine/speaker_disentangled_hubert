@@ -25,6 +25,10 @@ def syllable_segmentation(config):
         model = S5HubertForSyllableDiscovery.from_pretrained(
             config.path.checkpoint,
             segmentation_layer=config.model.segmentation_layer,
+            sec_per_syllable=config.mincut.sec_per_syllable,
+            merge_threshold=config.mincut.merge_threshold,
+            min_duration=config.mincut.min_duration,
+            max_duration=config.mincut.max_duration,
         ).cuda()
     elif config.model.model_type in MODELS:
         model = MODELS[config.model.model_type](

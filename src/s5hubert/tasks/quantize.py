@@ -5,7 +5,7 @@ import numpy as np
 from sklearn.cluster import AgglomerativeClustering, MiniBatchKMeans
 
 
-def clustering(config):
+def quantize(config):
     segment_dir = Path(config.path.segment_dir)
     segment_paths = []
 
@@ -23,17 +23,17 @@ def clustering(config):
     Path(config.path.quantizer2).parent.mkdir(parents=True, exist_ok=True)
 
     quantizer1 = MiniBatchKMeans(
-        n_clusters=config.n_clusters.step1,
-        batch_size=10000,
-        verbose=1,
-        compute_labels=False,
-        random_state=config.common.seed,
-        max_no_improvement=100,
-        n_init=5,
-        reassignment_ratio=0.0,
+        n_clusters=config.quantizer.n_clusters1,
+        batch_size=config.quantizer.batch_size,
+        verbose=config.quantizer.verbose,
+        compute_labels=config.quantizer.compute_labels,
+        random_state=config.quantizer.random_state,
+        max_no_improvement=config.quantizer.max_no_improvement,
+        n_init=config.quantizer.n_init,
+        reassignment_ratio=config.quantizer.reassignment_ratio,
     )
     quantizer1.fit(hidden_states)
     joblib.dump(quantizer1, config.path.quantizer1)
 
-    quantizer2 = AgglomerativeClustering(config.n_clusters.step2)
+    quantizer2 = AgglomerativeClustering(config.quantizer.n_clusters2)
     np.save(config.path.quantizer2, quantizer2.fit_predict(quantizer1.cluster_centers_))

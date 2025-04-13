@@ -65,7 +65,7 @@ def evaluate(config):
         num_units += len(hyp_boundary)
 
     # joint prob
-    p_xy = np.zeros((len(syllable_counter), config.n_clusters.step2))
+    p_xy = np.zeros((len(syllable_counter), config.quantizer.n_clusters2))
     p_xy = pd.DataFrame(p_xy, index=list(syllable_counter))
     for (ref, hyp), count in matching_counter.items():
         p_xy.loc[ref, hyp] = count

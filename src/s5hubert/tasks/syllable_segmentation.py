@@ -2,7 +2,9 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import torch
 import torchaudio
+from torch.utils.data import ConcatDataset
 from tqdm import tqdm
 
 from ...sylber.sylber import Segmenter
@@ -10,6 +12,7 @@ from ..mincut.mincut_utils import parallel_mincut
 from ..models.hubert import HubertForSyllableDiscovery
 from ..models.s5hubert import S5HubertForSyllableDiscovery
 from ..models.vghubert import VGHubertForSyllableDiscovery
+from ..utils.data import LibriSpeech
 
 sys.path.append("src/SyllableLM")
 from ...SyllableLM.extract_units import SylBoostFeatureReader
@@ -100,3 +103,50 @@ def syllable_segmentation(config):
             config.mincut.max_duration,
             config.mincut.num_workers,
         )
+
+
+def _syllable_segmentation(config):
+    model = S5HubertForSyllableDiscovery.from_pretrained(
+        config.path.checkpoint,
+        segmentation_layer=config.model.segmentation_layer,
+        sec_per_syllable=config.mincut.sec_per_syllable,
+        merge_threshold=config.mincut.merge_threshold,
+        min_duration=config.mincut.min_duration,
+        max_duration=config.mincut.max_duration,
+    ).cuda()
+
+    dataset = ConcatDataset(
+        [
+            LibriSpeech(root=config.dataset.root, url="train-clean-100", max_sample_size=None, perturb=False),
+            LibriSpeech(root=config.dataset.root, url="train-clean-360", max_sample_size=None, perturb=False),
+            LibriSpeech(root=config.dataset.root, url="train-other-500", max_sample_size=None, perturb=False),
+            LibriSpeech(root=config.dataset.root, url="dev-clean", max_sample_size=None, perturb=False),
+            LibriSpeech(root=config.dataset.root, url="dev-other", max_sample_size=None, perturb=False),
+            LibriSpeech(root=config.dataset.root, url="test-clean", max_sample_size=None, perturb=False),
+            LibriSpeech(root=config.dataset.root, url="test-other", max_sample_size=None, perturb=False),
+        ]
+    )
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=config.dataloader.batch_size,
+        collate_fn=LibriSpeech.collate_fn,
+    )
+
+    segment_dir = Path(config.path.segment_dir)
+
+    for batch in tqdm(dataloader):
+        batch_outputs = model(
+            batch["teacher_input_values"].cuda(),
+            batch["teacher_attention_mask"].cuda(),
+        )
+
+        # save hidden states
+        for wav_name, outputs in zip(batch["wav_names"], batch_outputs):
+            segment_name = wav_name.replace(".flac", ".npy")
+            segment_path = segment_dir / segment_name
+            segment_path.parent.mkdir(parents=True, exist_ok=True)
+            outputs = {
+                "segments": outputs["segments"].cpu().numpy(),
+                "segment_features": outputs["segment_features"].cpu().numpy(),
+            }
+            np.save(segment_path, outputs)

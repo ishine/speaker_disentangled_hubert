@@ -73,8 +73,8 @@ def mincut_dp_torch(W: torch.Tensor, num_syllables: int, min_duration: int, max_
 def mincut_torch(
     hidden_states: torch.Tensor,
     sec_per_frame: float = 0.02,
-    sec_per_syllable: float = 0.2,
-    merge_threshold: float | None = 0.3,
+    sec_per_syllable: float = 0.15,
+    merge_threshold: float | None = 0.6,
     min_duration: int = 3,
     max_duration: int = 35,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -172,8 +172,8 @@ def mincut_dp_numpy(W: np.ndarray, num_syllables: int, min_duration: int, max_du
 def mincut_numpy(
     hidden_states: np.ndarray,
     sec_per_frame: float = 0.02,
-    sec_per_syllable: float = 0.2,
-    merge_threshold: float | None = 0.3,
+    sec_per_syllable: float = 0.15,
+    merge_threshold: float | None = 0.6,
     min_duration: int = 3,
     max_duration: int = 35,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -217,8 +217,8 @@ def mincut_numpy(
 def mincut_wrapper(
     ckpt_path,
     sec_per_frame: float = 0.02,
-    sec_per_syllable: float = 0.2,
-    merge_threshold: float | None = 0.3,
+    sec_per_syllable: float = 0.15,
+    merge_threshold: float | None = 0.6,
     min_duration: int = 3,
     max_duration: int = 35,
 ):
@@ -245,8 +245,8 @@ def parallel_mincut(
     ckpt_paths,
     disable_tqdm: bool = True,
     sec_per_frame: float = 0.02,
-    sec_per_syllable: float = 0.2,
-    merge_threshold: float | None = 0.3,
+    sec_per_syllable: float = 0.15,
+    merge_threshold: float | None = 0.6,
     min_duration: int = 3,
     max_duration: int = 35,
     num_workers: int | None = None,

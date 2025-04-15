@@ -17,7 +17,6 @@
 
 from typing import Dict, List, Tuple
 
-import joblib
 import numpy as np
 import torch
 from sklearn.cluster import AgglomerativeClustering, MiniBatchKMeans
@@ -257,8 +256,8 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         seed: int = 0,
         max_chunk: int = 400080,  # 25 seconds
         deduplicate: bool = True,
-        sec_per_syllable: float = 0.2,
-        merge_threshold: float | None = 0.3,
+        sec_per_syllable: float = 0.15,
+        merge_threshold: float | None = 0.6,
         min_duration: int = 3,
         max_duration: int = 35,
     ):
@@ -303,13 +302,13 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
 
         model = S5HubertForSyllableDiscovery.load_pretrained(
             "models/s5-hubert",
-            "models/s5-hubert/quantizer1.joblib",
+            "models/s5-hubert/quantizer1.npy",
             "models/s5-hubert/quantizer2.npy",
         )
         model.push_to_hub("s5-hubert", private=True)
         """
         model = cls.from_pretrained(model_path, **kwargs)
-        model.quantizer1 = torch.from_numpy(joblib.load(quantizer1_path).cluster_centers_)
+        model.quantizer1 = torch.from_numpy(np.load(quantizer1_path))
         model.quantizer2 = torch.from_numpy(np.load(quantizer2_path))
         return model
 

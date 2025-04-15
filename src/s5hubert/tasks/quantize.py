@@ -1,8 +1,8 @@
 from pathlib import Path
 
-import joblib
+import faiss
 import numpy as np
-from sklearn.cluster import AgglomerativeClustering, MiniBatchKMeans
+from sklearn.cluster import AgglomerativeClustering
 
 
 def quantize(config):
@@ -17,23 +17,27 @@ def quantize(config):
             segment_paths.append(segment_path)
     segment_paths.sort()
 
+    # 128GB CPU memory
     hidden_states = np.concatenate([np.load(path, allow_pickle=True)[()]["segment_features"] for path in segment_paths])
 
     Path(config.path.quantizer1).parent.mkdir(parents=True, exist_ok=True)
     Path(config.path.quantizer2).parent.mkdir(parents=True, exist_ok=True)
 
-    quantizer1 = MiniBatchKMeans(
-        n_clusters=config.quantizer.n_clusters1,
-        batch_size=config.quantizer.batch_size,
+    quantizer1 = faiss.Kmeans(
+        hidden_states.shape[1],
+        config.quantizer.n_clusters1,
+        niter=config.quantizer.niter,
+        nredo=config.quantizer.nredo,
         verbose=config.quantizer.verbose,
-        compute_labels=config.quantizer.compute_labels,
-        random_state=config.quantizer.random_state,
-        max_no_improvement=config.quantizer.max_no_improvement,
-        n_init=config.quantizer.n_init,
-        reassignment_ratio=config.quantizer.reassignment_ratio,
+        seed=config.quantizer.random_state,
+        gpu=True,
+        min_points_per_centroid=config.quantizer.min_points_per_centroid,
+        max_points_per_centroid=config.quantizer.max_points_per_centroid
+        if config.quantizer.max_points_per_centroid
+        else hidden_states.shape[0],
     )
     quantizer1.fit(hidden_states)
-    joblib.dump(quantizer1, config.path.quantizer1)
+    np.save(config.path.quantizer1, quantizer1.centroids)
 
     quantizer2 = AgglomerativeClustering(config.quantizer.n_clusters2)
-    np.save(config.path.quantizer2, quantizer2.fit_predict(quantizer1.cluster_centers_))
+    np.save(config.path.quantizer2, quantizer2.fit_predict(quantizer1.centroids))

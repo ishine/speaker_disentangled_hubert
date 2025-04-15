@@ -3,7 +3,7 @@ common:
 
 path:
   checkpoint: "sylber"
-  quantizer1: "models/sylber/quantizer1.joblib"
+  quantizer1: "models/sylber/quantizer1.npy"
   quantizer2: "models/sylber/quantizer2.npy"
   segment_dir: "segments/sylber"
   result: "results/sylber.json"
@@ -25,10 +25,9 @@ model:
 quantizer:
   n_clusters1: 16384
   n_clusters2: 4096
-  batch_size: 10000
-  verbose: 1
-  compute_labels: false
+  niter: 100
+  nredo: 5
+  verbose: true
   random_state: ${common.seed}
-  max_no_improvement: 100
-  n_init: 5
-  reassignment_ratio: 0.0
+  min_points_per_centroid: 1
+  max_points_per_centroid: null

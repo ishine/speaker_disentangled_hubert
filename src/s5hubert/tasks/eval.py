@@ -3,7 +3,6 @@ import re
 from collections import Counter
 from pathlib import Path
 
-import joblib
 import numpy as np
 import pandas as pd
 import torch
@@ -20,7 +19,7 @@ def evaluate(config):
 
     # load clustering model
     if config.model.model_type != "sylboost":
-        quantizer1 = torch.from_numpy(joblib.load(config.path.quantizer1).cluster_centers_).cuda()
+        quantizer1 = torch.from_numpy(np.load(config.path.quantizer1)).cuda()
         quantizer2 = torch.from_numpy(np.load(config.path.quantizer2)).cuda()
 
     matching_counter = Counter()

@@ -1,9 +1,9 @@
 import sys
 import warnings
 
-import joblib
 import numpy as np
 import torch
+from scipy.spatial import distance
 from torch.utils.data import ConcatDataset
 from torchaudio.functional import edit_distance
 from tqdm import tqdm
@@ -48,7 +48,7 @@ def eval_ued(config):
                 device="cuda:0",
             )
         mincut = MincutWrapper(syl_dur=0.2, ft_sr=50)
-        quantizer1 = joblib.load(config.path.quantizer1)
+        quantizer1 = np.load(config.path.quantizer1)
         quantizer2 = np.load(config.path.quantizer2)
     elif config.model.model_type in MODELS:
         model = MODELS[config.model.model_type](
@@ -66,7 +66,7 @@ def eval_ued(config):
         )
     elif config.model.model_type == "sylber":
         model = Segmenter(config.path.checkpoint)
-        quantizer1 = joblib.load(config.path.quantizer1)
+        quantizer1 = np.load(config.path.quantizer1)
         quantizer2 = np.load(config.path.quantizer2)
     else:
         return
@@ -103,8 +103,8 @@ def eval_ued(config):
         elif config.model.model_type == "sdhubert":
             ref = mincut(**segmenter(batch["teacher_input_values"].squeeze(0).numpy()))
             hyp = mincut(**segmenter(batch["student_input_values"].squeeze(0).numpy()))
-            ref = quantizer2[quantizer1.predict(ref["segment_features"])]
-            hyp = quantizer2[quantizer1.predict(hyp["segment_features"])]
+            ref = quantizer2[distance.cdist(ref["segment_features"], quantizer1).argmin(1)]
+            hyp = quantizer2[distance.cdist(hyp["segment_features"], quantizer1).argmin(1)]
         elif config.model.model_type in MODELS:
             ref = model(batch["teacher_input_values"].cuda())["units"]
             hyp = model(batch["student_input_values"].cuda())["units"]
@@ -114,8 +114,8 @@ def eval_ued(config):
         elif config.model.model_type == "sylber":
             ref = model(wav=batch["teacher_input_values"].squeeze(0).numpy())
             hyp = model(wav=batch["student_input_values"].squeeze(0).numpy())
-            ref = quantizer2[quantizer1.predict(ref["segment_features"])]
-            hyp = quantizer2[quantizer1.predict(hyp["segment_features"])]
+            ref = quantizer2[distance.cdist(ref["segment_features"], quantizer1).argmin(1)]
+            hyp = quantizer2[distance.cdist(hyp["segment_features"], quantizer1).argmin(1)]
 
         # unit edit distance (UED)
         # https://arxiv.org/abs/2209.15483

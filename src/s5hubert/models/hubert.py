@@ -17,7 +17,6 @@
 
 from typing import Dict, Tuple
 
-import joblib
 import numpy as np
 import torch
 from torch import nn
@@ -34,7 +33,7 @@ class HubertForSyllableDiscovery(nn.Module):
     def __init__(
         self,
         checkpoint_path="facebook/hubert-base-ls960",
-        quantizer1_path="models/hubert/quantizer1.joblib",
+        quantizer1_path="models/hubert/quantizer1.npy",
         quantizer2_path="models/hubert/quantizer2.npy",
         segmentation_layer: int = 8,
         seed: int = 0,
@@ -47,9 +46,7 @@ class HubertForSyllableDiscovery(nn.Module):
         self.hubert = HubertModel.from_pretrained(checkpoint_path, weights_only=False)
         self.hubert.eval()
 
-        self.register_buffer(
-            "quantizer1", torch.from_numpy(joblib.load(quantizer1_path).cluster_centers_) if quantizer1_path else None
-        )
+        self.register_buffer("quantizer1", torch.from_numpy(np.load(quantizer1_path)) if quantizer1_path else None)
         self.register_buffer("quantizer2", torch.from_numpy(np.load(quantizer2_path)) if quantizer2_path else None)
 
         fix_random_seed(seed)

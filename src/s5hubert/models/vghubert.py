@@ -20,7 +20,6 @@ import warnings
 from pathlib import Path
 from typing import Dict
 
-import joblib
 import numpy as np
 import torch
 from torch import nn
@@ -49,7 +48,7 @@ class VGHubertForSyllableDiscovery(nn.Module):
     def __init__(
         self,
         checkpoint_path="models/vg-hubert_3",
-        quantizer1_path="models/vg-hubert_3/quantizer1.joblib",
+        quantizer1_path="models/vg-hubert_3/quantizer1.npy",
         quantizer2_path="models/vg-hubert_3/quantizer2.npy",
         segmentation_layer: int = 8,
         seed: int = 0,
@@ -61,9 +60,7 @@ class VGHubertForSyllableDiscovery(nn.Module):
             warnings.simplefilter("ignore", FutureWarning)
             self.hubert = load_vghubert(checkpoint_path)
 
-        self.register_buffer(
-            "quantizer1", torch.from_numpy(joblib.load(quantizer1_path).cluster_centers_) if quantizer1_path else None
-        )
+        self.register_buffer("quantizer1", torch.from_numpy(np.load(quantizer1_path)) if quantizer1_path else None)
         self.register_buffer("quantizer2", torch.from_numpy(np.load(quantizer2_path)) if quantizer2_path else None)
 
         fix_random_seed(seed)

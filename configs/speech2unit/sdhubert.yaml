@@ -26,10 +26,3 @@ model:
 quantizer:
   n_clusters1: 16384
   n_clusters2: 4096
-  batch_size: 10000
-  verbose: 1
-  compute_labels: false
-  random_state: ${common.seed}
-  max_no_improvement: 100
-  n_init: 5
-  reassignment_ratio: 0.0

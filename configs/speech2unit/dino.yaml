@@ -5,7 +5,7 @@ common:
 
 path:
   checkpoint: "models/s5-hubert-dino"
-  quantizer1: "models/s5-hubert-dino/quantizer1.joblib"
+  quantizer1: "models/s5-hubert-dino/quantizer1.npy"
   quantizer2: "models/s5-hubert-dino/quantizer2.npy"
   segment_dir: "segments/s5-hubert-dino"
   result: "results/s5-hubert-dino.json"
@@ -48,18 +48,17 @@ optim:
 quantizer:
   n_clusters1: 16384
   n_clusters2: 4096
-  batch_size: 10000
-  verbose: 1
-  compute_labels: false
+  niter: 100
+  nredo: 5
+  verbose: true
   random_state: ${common.seed}
-  max_no_improvement: 100
-  n_init: 5
-  reassignment_ratio: 0.0
+  min_points_per_centroid: 1
+  max_points_per_centroid: null
 
 mincut:
   sec_per_frame: 0.02
-  sec_per_syllable: 0.2
-  merge_threshold: 0.3
+  sec_per_syllable: 0.15
+  merge_threshold: 0.6
   min_duration: 3
   max_duration: 35
   num_workers: 32

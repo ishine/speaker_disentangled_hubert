@@ -52,6 +52,7 @@ quantizer:
   nredo: 5
   verbose: true
   random_state: ${common.seed}
+  gpu: true
   min_points_per_centroid: 1
   max_points_per_centroid: null
 

@@ -30,13 +30,13 @@ def quantize(config):
         nredo=config.quantizer.nredo,
         verbose=config.quantizer.verbose,
         seed=config.quantizer.random_state,
-        gpu=True,
+        gpu=config.quantizer.gpu,
         min_points_per_centroid=config.quantizer.min_points_per_centroid,
         max_points_per_centroid=config.quantizer.max_points_per_centroid
         if config.quantizer.max_points_per_centroid
         else hidden_states.shape[0],
     )
-    quantizer1.fit(hidden_states)
+    quantizer1.train(hidden_states)
     np.save(config.path.quantizer1, quantizer1.centroids)
 
     quantizer2 = AgglomerativeClustering(config.quantizer.n_clusters2)

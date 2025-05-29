@@ -345,11 +345,13 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         self,
         input_values: torch.Tensor,
         attention_mask: torch.Tensor | None = None,
-    ) -> List[torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         extract_features = self.hubert.feature_extractor(input_values)
         extract_features = extract_features.transpose(1, 2)
 
-        lengths = torch.full((extract_features.shape[0],), extract_features.shape[1], dtype=torch.int)
+        lengths = torch.full(
+            (extract_features.shape[0],), extract_features.shape[1], dtype=torch.int, device=extract_features.device
+        )
         if attention_mask is not None:
             # compute reduced attention_mask corresponding to feature vectors
             attention_mask = self.hubert._get_feature_vector_attention_mask(extract_features.shape[1], attention_mask)
@@ -376,7 +378,7 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         for layer in self.hubert.encoder.layers[: self.segmentation_layer]:
             hidden_states = layer(hidden_states, attention_mask=attention_mask)[0]
 
-        return [h[:l] for h, l in zip(hidden_states, lengths)]
+        return hidden_states, lengths
 
     @torch.inference_mode()
     def forward(
@@ -404,17 +406,22 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         """
         outputs = []
 
-        hidden_states = self.extract_features(input_values, attention_mask)
+        hidden_states, lengths = self.extract_features(input_values, attention_mask)
 
-        for dense in hidden_states:
-            segments, segment_features, frame_boundary = mincut_torch(
-                dense,
-                sec_per_frame=self.sec_per_frame,
-                sec_per_syllable=self.sec_per_syllable,
-                merge_threshold=self.merge_threshold,
-                min_duration=self.min_duration,
-                max_duration=self.max_duration,
-            )
+        batch_segments, batch_segment_features, batch_frame_boundary = mincut_torch(
+            hidden_states,
+            lengths,
+            sec_per_frame=self.sec_per_frame,
+            sec_per_syllable=self.sec_per_syllable,
+            merge_threshold=self.merge_threshold,
+            min_duration=self.min_duration,
+            max_duration=self.max_duration,
+        )
+
+        for dense, length, segments, segment_features, frame_boundary in zip(
+            hidden_states, lengths, batch_segments, batch_segment_features, batch_frame_boundary
+        ):
+            dense = dense[:length]
 
             # K-means
             intermediate_units = torch.cdist(segment_features, self.quantizer1).argmin(1)
@@ -469,6 +476,8 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
             dense (`torch.FloatTensor` of shape `((sequence_length - 400) // 320 + 1, hidden_size)`):
                 Latent speech frame representations extracted from the syllable segmentation layer.
         """
+        raise RuntimeError("chunk_forward is no longer supported. Please use forward instead.")
+
         assert len(input_values) == 1
 
         outputs = []

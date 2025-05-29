@@ -1,43 +1,50 @@
-import math
 from functools import partial
 from multiprocessing import Pool
-from typing import Tuple
+from typing import List, Tuple
 
 import numpy as np
 import torch
 from tqdm import tqdm
 
 
-def mincut_dp_torch(W: torch.Tensor, num_syllables: int, min_duration: int, max_duration: int):
+def mincut_dp_torch(
+    W: torch.Tensor,
+    lengths: torch.Tensor,
+    num_syllables: torch.Tensor,
+    min_duration: int,
+    max_duration: int,
+) -> List[List[int]]:
     """
     Args:
-        W (`torch.FloatTensor` of shape `(sequence_length, sequence_length)`):
+        W (`torch.FloatTensor` of shape `(batch_size, sequence_length, sequence_length)`):
             Self-similarity matrix.
     """
-    T = W.shape[0]
+    bsz, T, _ = W.shape
+    max_num_syllables = num_syllables.max()
 
-    W_pad = torch.zeros((T + 1, T + 1), dtype=W.dtype, device=W.device)
-    W_pad[1:, 1:] = W
+    W_pad = torch.zeros((bsz, T + 1, T + 1), dtype=W.dtype, device=W.device)
+    W_pad[:, 1:, 1:] = W
     W = W_pad
 
-    W_cumsum = W.cumsum(dim=0).cumsum(dim=1)  # (T + 1, T + 1)
-    V = W_cumsum[-1]  # (T + 1,)
+    W_cumsum = W.cumsum(dim=1).cumsum(dim=2)  # (bsz, T + 1, T + 1)
+    V = W_cumsum[:, -1]  # (bsz, T + 1)
 
     # vol[i, j] = W[i : j + 1].sum()
-    vol = V[1:][None, :] - V[:-1][:, None]  # (T, T)
+    vol = V[:, 1:].unsqueeze(1) - V[:, :-1].unsqueeze(2)  # (bsz, T, T)
 
     arange = torch.arange(T, device=W.device)
     i, j = torch.meshgrid(arange, arange + 1, indexing="ij")
 
     # W_sum[i, j] = W[i : j + 1, i : j + 1].sum()
-    W_sum = W_cumsum[j, j] - 2 * W_cumsum[i, j] + W_cumsum[i, i]
+    W_sum = W_cumsum[:, j, j] - 2 * W_cumsum[:, i, j] + W_cumsum[:, i, i]
     cut = vol - W_sum
     ncut = cut / (cut + W_sum / 2)
 
-    mask = torch.tril(torch.ones_like(ncut, dtype=torch.bool), -2 + min_duration)
+    mask = torch.tril(torch.ones((T, T), dtype=torch.bool), -2 + min_duration)
+    mask = mask.unsqueeze(0).expand(bsz, -1, -1)
     ncut[mask] = float("inf")
 
-    # gather_indices: (max_duration - min_duration + 1, T)
+    # gather_indices: (bsz, max_duration - min_duration + 1, T)
     gather_indices = (
         torch.as_strided(
             torch.arange(1 - max_duration, T - min_duration + 1, device=W.device),
@@ -47,68 +54,96 @@ def mincut_dp_torch(W: torch.Tensor, num_syllables: int, min_duration: int, max_
         .clip(0)
         .T
     )
-    ncut = torch.take_along_dim(ncut, gather_indices, 0)  # (max_duration - min_duration + 1, T)
+    gather_indices = gather_indices.unsqueeze(0).expand(bsz, -1, -1)
+    ncut = torch.take_along_dim(ncut, gather_indices, 1)  # (bsz, max_duration - min_duration + 1, T)
 
-    B = torch.zeros((T + 1, num_syllables + 1), dtype=torch.int)
-    C = torch.full((T + 1, num_syllables + 1), torch.finfo(W.dtype).max, device=W.device)
-    C[0, 0] = 0
+    B = torch.zeros((bsz, T + 1, max_num_syllables + 1), dtype=torch.int)
+    C = torch.full((bsz, T + 1, max_num_syllables + 1), torch.finfo(W.dtype).max, device=W.device)
+    C[:, 0, 0] = 0
 
     # dynamic programming
-    for s in range(1, num_syllables + 1):
-        c = torch.take_along_dim(torch.broadcast_to(C[:T, s - 1 : s], (T, T)), gather_indices, 0) + ncut  # (d, T)
-        min = torch.min(c, dim=0, keepdim=True)  # (1, T)
-        B[1:, s] = torch.take_along_dim(gather_indices, min.indices, 0).squeeze(0)
-        C[1:, s] = min.values.squeeze(0)
+    for s in range(1, max_num_syllables + 1):
+        c = torch.take_along_dim(C[:, :T, s - 1 : s].expand(-1, -1, T), gather_indices, 1) + ncut  # (bsz, d, T)
+        min = torch.min(c, dim=1, keepdim=True)  # (bsz, 1, T)
+        B[:, 1:, s] = torch.take_along_dim(gather_indices, min.indices, 1).squeeze(1)
+        C[:, 1:, s] = min.values.squeeze(1)
 
     # backtrack
-    prev_b = T
-    boundary = [prev_b]
-    for k in range(num_syllables, 0, -1):
-        prev_b = B[prev_b, k]
-        boundary.append(prev_b)
-    boundary.reverse()
-    return boundary
+    boundaries = []
+    for batch_idx in range(bsz):
+        prev_b = lengths[batch_idx]
+        boundary = [prev_b]
+        for k in range(num_syllables[batch_idx], 0, -1):
+            prev_b = B[batch_idx, prev_b, k]
+            boundary.append(prev_b)
+        boundary.reverse()
+        boundaries.append(boundary)
+
+    return boundaries
 
 
 def mincut_torch(
-    hidden_states: torch.Tensor,
+    batch_hidden_states: torch.Tensor,
+    lengths: torch.Tensor,
     sec_per_frame: float = 0.02,
     sec_per_syllable: float = 0.15,
     merge_threshold: float | None = 0.6,
     min_duration: int = 3,
     max_duration: int = 35,
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> Tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]]:
     """
     A computationally efficient PyTorch implementation of the exact minimum cut algorithm
 
     Args:
-        hidden_states (`torch.FloatTensor` of shape `(sequence_length, hidden_size)`):
+        hidden_states (`torch.FloatTensor` of shape `(batch_size, sequence_length, hidden_size)`):
             Latent speech frame representations.
     """
-    num_syllables = int(math.ceil(len(hidden_states) * sec_per_frame / sec_per_syllable))
+    bsz, T, D = batch_hidden_states.shape
+    num_syllables = torch.ceil(lengths.float() * sec_per_frame / sec_per_syllable).int()
 
-    ssm = hidden_states @ hidden_states.T
-    ssm = ssm - torch.min(ssm) + 1e-7  # make it non-negative
-    seg_boundary_frame = mincut_dp_torch(ssm, num_syllables, min_duration, max_duration)
+    # padding mask
+    mask = torch.arange(T, device=lengths.device).unsqueeze(0) < lengths.unsqueeze(1)  # (bsz, T)
+    mask = torch.logical_and(mask.unsqueeze(1), mask.unsqueeze(2))
 
-    seg_boundary_frame_pairs = [[l, r] for l, r in zip(seg_boundary_frame[:-1], seg_boundary_frame[1:])]
-    pooled_feat = torch.stack([hidden_states[l:r].mean(0) for l, r in seg_boundary_frame_pairs])
+    # self-similarity matrices
+    ssm = torch.bmm(batch_hidden_states, batch_hidden_states.transpose(1, 2))
+    ssm.masked_fill_(~mask, torch.finfo(ssm.dtype).max)
+    ssm = ssm - ssm.view(bsz, -1).min(dim=1, keepdim=True).values.unsqueeze(2) + 1e-7  # make it non-negative
+    ssm = ssm * mask
+    batch_seg_boundary_frame = mincut_dp_torch(ssm, lengths, num_syllables, min_duration, max_duration)
 
-    if merge_threshold is not None and len(seg_boundary_frame_pairs) >= 3:
-        all_sim = torch.nn.functional.cosine_similarity(pooled_feat[:-1], pooled_feat[1:])
-        min_id = torch.argmax(all_sim)
-        while all_sim[min_id] >= merge_threshold and len(seg_boundary_frame_pairs) >= 3:
-            l_merge, r_merge = seg_boundary_frame_pairs[min_id], seg_boundary_frame_pairs[min_id + 1]
-            seg_boundary_frame_pairs = [
-                pair for i, pair in enumerate(seg_boundary_frame_pairs) if i != min_id and i != min_id + 1
-            ]
-            seg_boundary_frame_pairs.insert(min_id, [l_merge[0], r_merge[1]])
-            pooled_feat = torch.stack([hidden_states[l:r].mean(0) for l, r in seg_boundary_frame_pairs])
+    batch_boundaries = []
+    batch_pooled_feat = []
+    batch_frame_boundaries = []
+
+    for batch_idx in range(bsz):
+        seg_boundary_frame = batch_seg_boundary_frame[batch_idx]
+        hidden_states = batch_hidden_states[batch_idx]
+
+        seg_boundary_frame_pairs = [[l, r] for l, r in zip(seg_boundary_frame[:-1], seg_boundary_frame[1:])]
+        pooled_feat = torch.stack([hidden_states[l:r].mean(0) for l, r in seg_boundary_frame_pairs])
+
+        if merge_threshold is not None and len(seg_boundary_frame_pairs) >= 3:
             all_sim = torch.nn.functional.cosine_similarity(pooled_feat[:-1], pooled_feat[1:])
             min_id = torch.argmax(all_sim)
+            while all_sim[min_id] >= merge_threshold and len(seg_boundary_frame_pairs) >= 3:
+                l_merge, r_merge = seg_boundary_frame_pairs[min_id], seg_boundary_frame_pairs[min_id + 1]
+                seg_boundary_frame_pairs = [
+                    pair for i, pair in enumerate(seg_boundary_frame_pairs) if i != min_id and i != min_id + 1
+                ]
+                seg_boundary_frame_pairs.insert(min_id, [l_merge[0], r_merge[1]])
+                pooled_feat = torch.stack([hidden_states[l:r].mean(0) for l, r in seg_boundary_frame_pairs])
+                all_sim = torch.nn.functional.cosine_similarity(pooled_feat[:-1], pooled_feat[1:])
+                min_id = torch.argmax(all_sim)
 
-    boundaries = torch.tensor(seg_boundary_frame_pairs, device=hidden_states.device) * sec_per_frame
-    return boundaries, pooled_feat, torch.tensor(seg_boundary_frame_pairs, device=hidden_states.device)
+        boundaries = torch.tensor(seg_boundary_frame_pairs, device=hidden_states.device) * sec_per_frame
+        frame_boundaries = torch.tensor(seg_boundary_frame_pairs, device=hidden_states.device)
+
+        batch_boundaries.append(boundaries)
+        batch_pooled_feat.append(pooled_feat)
+        batch_frame_boundaries.append(frame_boundaries)
+
+    return batch_boundaries, batch_pooled_feat, batch_frame_boundaries
 
 
 def mincut_dp_numpy(W: np.ndarray, num_syllables: int, min_duration: int, max_duration: int):

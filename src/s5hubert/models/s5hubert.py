@@ -19,10 +19,9 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 import torch
-from sklearn.cluster import AgglomerativeClustering, MiniBatchKMeans
 from torch import nn
 from torch.nn.utils.rnn import pad_sequence
-from transformers import AutoModel
+from transformers import AutoConfig, AutoModel
 from transformers.modeling_outputs import SequenceClassifierOutput
 from transformers.models.hubert.modeling_hubert import HubertModel, HubertPreTrainedModel
 
@@ -44,7 +43,10 @@ class S5Hubert(nn.Module):
         self.ema_decay = ema_decay
         self.init_last_layer = init_last_layer
 
-        self.student = AutoModel.from_pretrained(model_name_or_path, weights_only=False)
+        config = AutoConfig.from_pretrained(model_name_or_path)
+        config.num_hidden_layers = config.num_hidden_layers - init_last_layer
+
+        self.student = AutoModel.from_pretrained(model_name_or_path, config=config, weights_only=False)
         self.student_projector = MLP(
             self.student.config.hidden_size,
             head_out_size,
@@ -62,8 +64,8 @@ class S5Hubert(nn.Module):
         self.make_teacher(head_out_size, head_hidden_size)
 
     def reset_parameters(self, init_last_layer: int = 3):
-        for m in self.student.encoder.layers[-init_last_layer:].modules():
-            init_module(m)
+        # for m in self.student.encoder.layers[-init_last_layer:].modules():
+        #     init_module(m)
 
         for m in self.student_projector.modules():
             init_module(m)
@@ -233,7 +235,7 @@ class S5Hubert(nn.Module):
         self.student.encoder.pos_conv_embed.requires_grad_(False)
         self.student.encoder.layer_norm.requires_grad_(False)
         self.student.encoder.layers.requires_grad_(False)
-        self.student.encoder.layers[-self.init_last_layer :].requires_grad_(True)
+        # self.student.encoder.layers[-self.init_last_layer :].requires_grad_(True)
 
     def defrost_transformer_encoder(self):
         # CNN
@@ -312,35 +314,6 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         model.quantizer2 = torch.from_numpy(np.load(quantizer2_path))
         return model
 
-    def train_quantizer(
-        self,
-        hidden_states: np.ndarray,
-        batch_size: int = 10000,
-        verbose: int = 1,
-        compute_labels: bool = False,
-        random_state=0,
-        max_no_improvement: int = 100,
-        n_init: int = 5,
-        reassignment_ratio: float = 0.0,
-    ):
-        quantizer1 = MiniBatchKMeans(
-            n_clusters=self.n_units_step1,
-            batch_size=batch_size,
-            verbose=verbose,
-            compute_labels=compute_labels,
-            random_state=random_state,
-            max_no_improvement=max_no_improvement,
-            n_init=n_init,
-            reassignment_ratio=reassignment_ratio,
-        )
-        quantizer1.fit(hidden_states)
-
-        quantizer2 = AgglomerativeClustering(self.n_units_step2)
-        quantizer2.fit_predict(quantizer1.cluster_centers_)
-
-        self.register_buffer("quantizer1", torch.from_numpy(quantizer1.cluster_centers_))
-        self.register_buffer("quantizer2", torch.from_numpy(quantizer2))
-
     def extract_features(
         self,
         input_values: torch.Tensor,
@@ -358,6 +331,8 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
             lengths = attention_mask.sum(dim=1)
 
         hidden_states = self.hubert.feature_projection(extract_features)
+        if isinstance(hidden_states, tuple):
+            hidden_states = hidden_states[0]
 
         if attention_mask is not None:
             # make sure padded tokens output 0

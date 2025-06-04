@@ -21,8 +21,8 @@ dataset:
   test_alignment: "src/sdhubert/files/librispeech_syllable_test.json"
 
 dataloader:
-  batch_size: 72 # work with single 24GB VRAM GPU
-  num_workers: 30
+  batch_size: 108 # work with single 24GB VRAM GPU
+  num_workers: 6
 
 model:
   model_type: "s5hubert"
@@ -39,7 +39,7 @@ optim:
   lr_min: 0.00001
   stage_ratio: [0.03, 0.47, 0.50] # tri-stage lr schedule
   weight_decay: 0.01
-  max_norm: null
+  max_norm: 0.0015
 
 quantizer:
   n_clusters1: 16384
@@ -58,4 +58,4 @@ mincut:
   merge_threshold: 0.6
   min_duration: 3
   max_duration: 35
-  num_workers: 32
+  num_workers: 2

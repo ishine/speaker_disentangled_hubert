@@ -30,7 +30,7 @@ class LibriSpeech(torchaudio.datasets.LIBRISPEECH):
         teacher_input_values = _load_waveform(self._archive, metadata[0], metadata[1])
 
         if self.max_sample_size is not None:
-            # teacher_input_values, _ = librosa.effects.trim(teacher_input_values, top_db=20)
+            teacher_input_values, _ = librosa.effects.trim(teacher_input_values, top_db=20)
             diff = len(teacher_input_values) - self.max_sample_size
             if diff > 0:
                 start = random.randrange(diff)

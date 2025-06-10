@@ -21,7 +21,7 @@ dataset:
   test_alignment: "src/sdhubert/files/librispeech_syllable_test.json"
 
 dataloader:
-  batch_size: 108 # work with single 24GB VRAM GPU
+  batch_size: 216 # work with a single 48GB VRAM GPU
   num_workers: 6
 
 model:

@@ -14,7 +14,7 @@ dataset:
   root: "data" # ${root}/LibriSpeech/train-clean-100, train-clean-360, ...
   download: false
   max_sample_size: 80080 # 5 seconds
-  train_file: "src/sdhubert/files/librispeech_train_10Ksubset.txt"
+  train_file: "data/librispeech_train.txt"
   dev_file: "src/sdhubert/files/librispeech_val.txt"
   test_file: "src/sdhubert/files/librispeech_test.txt"
   dev_alignment: "src/sdhubert/files/librispeech_syllable_val.json"
@@ -34,10 +34,10 @@ model:
   segmentation_layer: 8
 
 optim:
-  epoch: 15
+  epoch: 10
   lr: 0.0001
   lr_min: 0.00001
-  stage_ratio: [0.03, 0.47, 0.50] # tri-stage lr schedule
+  stage_ratio: [0.2, 0.4, 0.4] # tri-stage lr schedule
   weight_decay: 0.01
   max_norm: 0.0015
 

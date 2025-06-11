@@ -11,7 +11,7 @@ This is the official repository of the IEEE SLT 2024 paper [Self-Supervised Syll
 ## Setup
 
 ```shell
-conda create -y -n py310 -c pytorch -c nvidia -c conda-forge python=3.10.17 pip=24.0 faiss-gpu=1.10.0
+conda create -y -n py310 -c pytorch -c nvidia -c conda-forge python=3.10.18 pip=24.0 faiss-gpu=1.11.0
 conda activate py310
 pip install -r requirements/requirements.txt
 
@@ -52,8 +52,6 @@ Google Colab demo is found [here](https://colab.research.google.com/github/ryota
 ![](figures/model.png)
 
 You can download a pretrained model from [Hugging Face](https://huggingface.co/ryota-komatsu/s5-hubert).
-
-Other models can be downloaded from [the old repository](https://huggingface.co/ryota-komatsu/speaker_disentangled_hubert/tree/main).
 
 ## Data Preparation
 

@@ -1,0 +1,4 @@
+19c19
+<             load_ssl_model(cp_path='wav2vec_small.pt'),
+---
+>             load_ssl_model(cp_path='src/utmos/wav2vec_small.pt'),

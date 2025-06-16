@@ -1,5 +1,4 @@
 common:
-  fp16: true
   disable_tqdm: true # set true when using nohup
   seed: 0
 
@@ -14,15 +13,16 @@ dataset:
   root: "data" # ${root}/LibriSpeech/train-clean-100, train-clean-360, ...
   download: false
   max_sample_size: 80080 # 5 seconds
-  train_file: "src/sdhubert/files/librispeech_train_10Ksubset.txt"
+  train_file: "data/librispeech_train.txt"
   dev_file: "src/sdhubert/files/librispeech_val.txt"
   test_file: "src/sdhubert/files/librispeech_test.txt"
   dev_alignment: "src/sdhubert/files/librispeech_syllable_val.json"
   test_alignment: "src/sdhubert/files/librispeech_syllable_test.json"
+  perturb: true
 
 dataloader:
-  batch_size: 72 # work with single 24GB VRAM GPU
-  num_workers: 30
+  batch_size: 216 # work with a single 48GB VRAM GPU
+  num_workers: 6
 
 model:
   model_type: "s5hubert_dino"
@@ -38,16 +38,16 @@ model:
   segmentation_layer: 8
 
 optim:
-  epoch: 15
+  epoch: 10
   lr: 0.0001
   lr_min: 0.00001
-  stage_ratio: [0.03, 0.47, 0.50] # tri-stage lr schedule
+  stage_ratio: [0.2, 0.4, 0.4] # tri-stage lr schedule
   weight_decay: 0.01
   max_norm: 0.5
 
 quantizer:
-  n_clusters1: 16384
-  n_clusters2: 4096
+  n_clusters1: 24576
+  n_clusters2: 8192
   niter: 100
   nredo: 5
   verbose: true
@@ -62,4 +62,4 @@ mincut:
   merge_threshold: 0.6
   min_duration: 3
   max_duration: 35
-  num_workers: 32
+  num_workers: 2

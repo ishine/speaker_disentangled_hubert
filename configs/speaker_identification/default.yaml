@@ -1,5 +1,4 @@
 common:
-  fp16: true
   disable_tqdm: true # set true when using nohup
   seed: 0
 
@@ -13,7 +12,7 @@ dataset:
 
 dataloader:
   batch_size: 100 # work with single 24GB VRAM GPU
-  num_workers: 30
+  num_workers: 8
 
 model:
   model_type: "s5hubert"

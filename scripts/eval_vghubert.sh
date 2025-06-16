@@ -12,4 +12,6 @@ then
     tar -xvf models/vg-hubert_3.tar -C models
 fi
 
-python main.py --config configs/speech2unit/vghubert.yaml
+python main_speech2unit.py syllable_segmentation --config configs/speech2unit/vghubert.yaml
+python main_speech2unit.py quantize --config configs/speech2unit/vghubert.yaml
+python main_speech2unit.py evaluate --config configs/speech2unit/vghubert.yaml

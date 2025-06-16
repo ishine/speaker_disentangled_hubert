@@ -11,6 +11,8 @@ This is the official repository of the IEEE SLT 2024 paper [Self-Supervised Syll
 ## Setup
 
 ```shell
+sudo apt install git-lfs  # for UTMOS
+
 conda create -y -n py310 -c pytorch -c nvidia -c conda-forge python=3.10.18 pip=24.0 faiss-gpu=1.11.0
 conda activate py310
 pip install -r requirements/requirements.txt
@@ -85,13 +87,13 @@ dataset.root in a config file
 ## Training & Evaluation
 
 ```shell
-python main.py --config configs/speech2unit/default.yaml
+python main_speech2unit.py --config configs/speech2unit/default.yaml
 ```
 
 To run only a sub-task (train, syllable_segmentation, quantize, or evaluate), specify it as an argument.
 
 ```shell
-python main.py train --config configs/speech2unit/default.yaml
+python main_speech2unit.py train --config configs/speech2unit/default.yaml
 ```
 
 ## Citation

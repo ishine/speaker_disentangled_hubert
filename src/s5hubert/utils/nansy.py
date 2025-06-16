@@ -23,6 +23,7 @@
 # SOFTWARE.
 
 import os
+import random
 import warnings
 
 import numpy as np
@@ -70,7 +71,8 @@ def change_gender(x: np.ndarray, sr: int = 16000, lo=65, hi=400, f0_threshold=15
         lo, hi, ratio_fs, new_f0_med, ratio_pr = 75, 250, 1.1, 300, 1.2
 
     try:
-        ss = parselmouth.praat.call(s, "Change gender", lo, hi, ratio_fs, new_f0_med, ratio_pr, 1.0)
+        duration = random.choice([0.9, 1.1])
+        ss = parselmouth.praat.call(s, "Change gender", lo, hi, ratio_fs, new_f0_med, ratio_pr, duration)
     except:
         return np.copy(x)
 

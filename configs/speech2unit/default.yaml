@@ -1,5 +1,4 @@
 common:
-  fp16: true
   disable_tqdm: true # set true when using nohup
   seed: 0
 
@@ -19,6 +18,7 @@ dataset:
   test_file: "src/sdhubert/files/librispeech_test.txt"
   dev_alignment: "src/sdhubert/files/librispeech_syllable_val.json"
   test_alignment: "src/sdhubert/files/librispeech_syllable_test.json"
+  perturb: true
 
 dataloader:
   batch_size: 216 # work with a single 48GB VRAM GPU
@@ -39,11 +39,11 @@ optim:
   lr_min: 0.00001
   stage_ratio: [0.2, 0.4, 0.4] # tri-stage lr schedule
   weight_decay: 0.01
-  max_norm: 0.0015
+  max_norm: 0.001
 
 quantizer:
-  n_clusters1: 16384
-  n_clusters2: 4096
+  n_clusters1: 24576
+  n_clusters2: 8192
   niter: 100
   nredo: 5
   verbose: true

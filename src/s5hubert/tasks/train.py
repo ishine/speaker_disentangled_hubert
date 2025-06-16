@@ -101,18 +101,21 @@ def train(config):
                 url="train-clean-100",
                 download=config.dataset.download,
                 max_sample_size=config.dataset.max_sample_size,
+                perturb=config.dataset.perturb,
             ),
             LibriSpeech(
                 root=config.dataset.root,
                 url="train-clean-360",
                 download=config.dataset.download,
                 max_sample_size=config.dataset.max_sample_size,
+                perturb=config.dataset.perturb,
             ),
             LibriSpeech(
                 root=config.dataset.root,
                 url="train-other-500",
                 download=config.dataset.download,
                 max_sample_size=config.dataset.max_sample_size,
+                perturb=config.dataset.perturb,
             ),
         ]
     )
@@ -168,25 +171,11 @@ def train(config):
         decay_steps,
     )
 
-    scaler = torch.amp.GradScaler("cuda", enabled=config.common.fp16)
+    scaler = torch.amp.GradScaler("cuda", init_scale=1e32)
     writer = SummaryWriter(config.path.checkpoint)
 
     last_epoch = 0
     step = 0
-
-    # resume training
-    # if Path(config.path.checkpoint).is_file():
-    #     ckpt = torch.load(config.path.checkpoint, weights_only=True)
-
-    #     last_epoch = ckpt["epoch"]
-    #     step = ckpt["step"]
-    #     model.load_state_dict(ckpt["model"])
-    #     optimizer.load_state_dict(ckpt["optimizer"])
-    #     lr_scheduler.load_state_dict(ckpt["scheduler"])
-    #     scaler.load_state_dict(ckpt["scaler"])
-
-    #     print(f"load from {config.path.checkpoint}")
-    #     del ckpt
 
     if step < warmup_steps:
         model.freeze_pretrained_modules()
@@ -197,7 +186,7 @@ def train(config):
         model.train()
 
         for batch in tqdm(train_loader, desc=f"epoch {epoch}", disable=config.common.disable_tqdm):
-            with torch.amp.autocast("cuda", enabled=config.common.fp16):
+            with torch.amp.autocast("cuda", dtype=torch.bfloat16):
                 loss = model(
                     teacher_input_values=batch["teacher_input_values"].cuda(),
                     student_input_values=batch["student_input_values"].cuda(),
@@ -239,14 +228,5 @@ def train(config):
         results = validate(config, model, writer, step)
 
         # save model
-        # ckpt = {
-        #     "epoch": epoch,
-        #     "step": step,
-        #     "model": model.state_dict(),
-        #     "optimizer": optimizer.state_dict(),
-        #     "scheduler": lr_scheduler.state_dict(),
-        #     "scaler": scaler.state_dict(),
-        # }
         Path(config.path.checkpoint).parent.mkdir(parents=True, exist_ok=True)
         model.student.save_pretrained(config.path.checkpoint)
-        # torch.save(ckpt, config.path.checkpoint)

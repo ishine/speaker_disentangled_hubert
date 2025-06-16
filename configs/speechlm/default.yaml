@@ -1,0 +1,40 @@
+dataset:
+  wav_dir_train: ""
+  ext_audio: ".flac"
+
+  train: ""
+  units_per_sample: 125
+
+  swuggy: "ryota-komatsu/swuggy"  # lexical
+  sblimp: "ryota-komatsu/sblimp"  # syntactic
+
+  APP_DIR: "data/zr-data"
+  result_dir: "results/speechlm"
+
+dataloader:
+  batch_size_per_device: 1000  # effective batch size (tokens) = dataset.units_per_sample * batch_size_per_device * #GPUs
+
+model:
+  name: ""
+  path: "models/speechlm"
+
+  lora:
+    r: 32
+    lora_alpha: 8
+    target_modules: "all-linear"
+
+optim:
+  epoch: 24
+  warmup_steps: 100
+  lr: 0.0005
+  lr_min: 0.00005
+  beta1: 0.9
+  beta2: 0.98
+  max_norm: 0.1
+  summary_interval: 100
+  validation_save_interval: 10000
+  total_steps: 200000
+
+speech2unit:
+  model_name_or_path: "ryota-komatsu/s5-hubert"
+  num_workers: 16

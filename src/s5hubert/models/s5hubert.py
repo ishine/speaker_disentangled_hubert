@@ -20,7 +20,6 @@ from typing import Dict, List, Tuple
 import numpy as np
 import torch
 from torch import nn
-from torch.nn.utils.rnn import pad_sequence
 from transformers import AutoConfig, AutoModel
 from transformers.modeling_outputs import SequenceClassifierOutput
 from transformers.models.hubert.modeling_hubert import HubertModel, HubertPreTrainedModel
@@ -38,6 +37,7 @@ class S5Hubert(nn.Module):
         head_out_size: int = 256,
         head_hidden_size: int = 2048,
         ema_decay: float = 0.999,
+        layerdrop: float = 0.0,
     ):
         super().__init__()
         self.ema_decay = ema_decay
@@ -45,6 +45,7 @@ class S5Hubert(nn.Module):
 
         config = AutoConfig.from_pretrained(model_name_or_path)
         config.num_hidden_layers = config.num_hidden_layers - init_last_layer
+        config.layerdrop = layerdrop
 
         self.student = AutoModel.from_pretrained(model_name_or_path, config=config, weights_only=False)
         self.student_projector = MLP(
@@ -60,13 +61,10 @@ class S5Hubert(nn.Module):
         )
         self.loss_fn = nn.MSELoss()
 
-        self.reset_parameters(init_last_layer)
+        self.reset_parameters()
         self.make_teacher(head_out_size, head_hidden_size)
 
-    def reset_parameters(self, init_last_layer: int = 3):
-        # for m in self.student.encoder.layers[-init_last_layer:].modules():
-        #     init_module(m)
-
+    def reset_parameters(self):
         for m in self.student_projector.modules():
             init_module(m)
 
@@ -118,13 +116,21 @@ class S5Hubert(nn.Module):
             teacher_hidden_states, teacher_padding_mask = self.teacher_forward(
                 teacher_input_values, teacher_attention_mask
             )
-            teacher_projection = self.teacher_projector(teacher_hidden_states[-1][teacher_padding_mask])
+
+            teacher_hidden_states[-1][~teacher_padding_mask] = 0
+            teacher_pooled_output = teacher_hidden_states[-1].sum(dim=1) / teacher_padding_mask.sum(dim=1, keepdim=True)
+
+            teacher_projection = self.teacher_projector(teacher_pooled_output)
 
         # enable dropout
         self.student.feature_projection.train()
         self.student.encoder.layers.train()
         student_hidden_states, student_padding_mask = self.student_forward(student_input_values, student_attention_mask)
-        student_projection = self.student_projector(student_hidden_states[-1][student_padding_mask])
+
+        student_hidden_states[-1][~student_padding_mask] = 0
+        student_pooled_output = student_hidden_states[-1].sum(dim=1) / student_padding_mask.sum(dim=1, keepdim=True)
+
+        student_projection = self.student_projector(student_pooled_output)
         student_prediction = self.student_predictor(student_projection)
 
         return self.loss_fn(student_prediction, teacher_projection)
@@ -235,7 +241,6 @@ class S5Hubert(nn.Module):
         self.student.encoder.pos_conv_embed.requires_grad_(False)
         self.student.encoder.layer_norm.requires_grad_(False)
         self.student.encoder.layers.requires_grad_(False)
-        # self.student.encoder.layers[-self.init_last_layer :].requires_grad_(True)
 
     def defrost_transformer_encoder(self):
         # CNN
@@ -418,94 +423,6 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
                     "dense": dense,
                     "segments": segments,
                     "segment_features": segment_features,
-                }
-            )
-        return outputs
-
-    @torch.inference_mode()
-    def chunk_forward(
-        self,
-        input_values: torch.Tensor,
-        attention_mask: torch.Tensor | None = None,
-        batch_size: int = 16,
-    ) -> List[Dict[str, torch.Tensor]]:
-        """
-        process a single long (e.g., 1 hour) speech.
-
-        Args:
-            input_values (`torch.FloatTensor` of shape `(1, sequence_length)`):
-                Raw speech waveform.
-            attention_mask (`torch.LongTensor` of shape `(1, sequence_length)`, *optional*):
-                1: non-mask
-                0: mask
-            batch_size (`int`):
-                Batch size.
-
-        Returns:
-            units (`torch.LongTensor`):
-                Discrete pseudo-syllabic units.
-            intermediate_units (`torch.LongTensor`):
-                Intermediate K-means units.
-            durations (`torch.LongTensor`):
-                Durations of units, measured in frames.
-            dense (`torch.FloatTensor` of shape `((sequence_length - 400) // 320 + 1, hidden_size)`):
-                Latent speech frame representations extracted from the syllable segmentation layer.
-        """
-        raise RuntimeError("chunk_forward is no longer supported. Please use forward instead.")
-
-        assert len(input_values) == 1
-
-        outputs = []
-
-        if attention_mask is None:
-            attention_mask = torch.ones_like(input_values, dtype=torch.long)
-
-        input_values = input_values.squeeze(0)
-        attention_mask = attention_mask.squeeze(0)
-
-        # split a long sequence into chunks
-        input_values = torch.split(input_values, self.max_chunk)  # Tuple[torch.Tensor of shape `(len,)`]
-        attention_mask = torch.split(attention_mask, self.max_chunk)  # Tuple[torch.Tensor of shape `(len,)`]
-
-        input_values = pad_sequence(input_values, batch_first=True)  # (num_chunks, max_chunk)
-        attention_mask = pad_sequence(attention_mask, batch_first=True)  # (num_chunks, max_chunk)
-
-        # split chunks into batch
-        input_values = torch.split(input_values, batch_size)
-        attention_mask = torch.split(attention_mask, batch_size)
-
-        hidden_states = []  # List[torch.Tensor]
-        for batch_input_values, batch_attention_mask in zip(input_values, attention_mask):
-            hidden_states += self.extract_features(batch_input_values, batch_attention_mask)
-
-        for dense in hidden_states:
-            _, segment_features, frame_boundary = mincut_torch(
-                dense,
-                sec_per_frame=self.sec_per_frame,
-                sec_per_syllable=self.sec_per_syllable,
-                merge_threshold=self.merge_threshold,
-                min_duration=self.min_duration,
-                max_duration=self.max_duration,
-            )
-
-            # K-means
-            intermediate_units = torch.cdist(segment_features, self.quantizer1).argmin(1)
-
-            # Agglomerative clustering on K-means centroids
-            units = self.quantizer2[intermediate_units]
-
-            durations = frame_boundary[:, 1] - frame_boundary[:, 0]
-
-            if not self.deduplicate:
-                units = torch.repeat_interleave(units, durations)
-                intermediate_units = torch.repeat_interleave(intermediate_units, durations)
-
-            outputs.append(
-                {
-                    "units": units,
-                    "intermediate_units": intermediate_units,
-                    "durations": durations,
-                    "dense": dense,
                 }
             )
         return outputs

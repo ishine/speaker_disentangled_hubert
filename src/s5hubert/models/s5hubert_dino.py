@@ -19,9 +19,9 @@ from typing import Tuple
 
 import torch
 from torch import nn
-from transformers import AutoModel
+from transformers import AutoConfig, AutoModel
 
-from .modules import DINOHead, DINOLoss, init_module
+from .modules import DINOHead, DINOLoss
 
 
 class S5HubertDino(nn.Module):
@@ -36,12 +36,17 @@ class S5HubertDino(nn.Module):
         student_temp: float = 0.1,
         center_momentum: float = 0.9,
         ema_decay: float = 0.999,
+        layerdrop: float = 0.0,
     ):
         super().__init__()
         self.ema_decay = ema_decay
         self.init_last_layer = init_last_layer
 
-        self.student = AutoModel.from_pretrained(model_name_or_path, weights_only=False)
+        config = AutoConfig.from_pretrained(model_name_or_path)
+        config.num_hidden_layers = config.num_hidden_layers - init_last_layer
+        config.layerdrop = layerdrop
+
+        self.student = AutoModel.from_pretrained(model_name_or_path, config=config, weights_only=False)
         self.student_head = DINOHead(
             self.student.config.hidden_size,
             head_out_size,
@@ -50,12 +55,7 @@ class S5HubertDino(nn.Module):
         )
         self.loss_fn = DINOLoss(head_out_size, teacher_temp, student_temp, center_momentum)
 
-        self.reset_parameters(init_last_layer)
         self.make_teacher(head_out_size, head_hidden_size, head_bottleneck_size)
-
-    def reset_parameters(self, init_last_layer: int = 3):
-        for m in self.student.encoder.layers[-init_last_layer:].modules():
-            init_module(m)
 
     def make_teacher(
         self,
@@ -219,7 +219,6 @@ class S5HubertDino(nn.Module):
         self.student.encoder.pos_conv_embed.requires_grad_(False)
         self.student.encoder.layer_norm.requires_grad_(False)
         self.student.encoder.layers.requires_grad_(False)
-        self.student.encoder.layers[-self.init_last_layer :].requires_grad_(True)
 
     def defrost_transformer_encoder(self):
         # CNN

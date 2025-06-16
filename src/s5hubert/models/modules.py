@@ -40,7 +40,7 @@ class MLP(nn.Module):
         super().__init__()
         self.norm_outputs = norm_outputs
         self.mlp = nn.Sequential(
-            nn.Linear(in_dim, hidden_dim),
+            nn.Linear(in_dim, hidden_dim, bias=False),
             nn.BatchNorm1d(hidden_dim),
             nn.GELU(),
             nn.Linear(hidden_dim, out_dim, bias=False),

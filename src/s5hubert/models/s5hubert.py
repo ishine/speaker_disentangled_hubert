@@ -258,10 +258,8 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         self,
         config,
         segmentation_layer: int = 8,
-        n_units_step1: int = 16384,
-        n_units_step2: int = 4096,
+        n_units_step1: int = 24576,
         seed: int = 0,
-        max_chunk: int = 400080,  # 25 seconds
         deduplicate: bool = True,
         sec_per_syllable: float = 0.15,
         merge_threshold: float | None = 0.6,
@@ -281,9 +279,6 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
         """
         super().__init__(config)
         self.segmentation_layer = segmentation_layer
-        self.n_units_step1 = n_units_step1
-        self.n_units_step2 = n_units_step2
-        self.max_chunk = max_chunk
         self.deduplicate = deduplicate
         self.sec_per_frame = np.prod(config.conv_stride) / 16000
         self.sec_per_syllable = sec_per_syllable

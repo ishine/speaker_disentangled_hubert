@@ -27,12 +27,14 @@ sh scripts/setup.sh
 ```python
 import torchaudio
 
+from src.flow_matching.models import ConditionalFlowMatchingWithBigVGan
 from src.s5hubert import S5HubertForSyllableDiscovery
 
 wav_path = "/path/to/wav"
 
 # download a pretrained model from hugging face hub
 model = S5HubertForSyllableDiscovery.from_pretrained("ryota-komatsu/s5-hubert").cuda()
+decoder = ConditionalFlowMatchingWithBigVGan.from_pretrained("ryota-komatsu/").cuda()
 
 # load a waveform
 waveform, sr = torchaudio.load(wav_path)
@@ -43,6 +45,10 @@ batch_outputs = model(waveform.cuda())
 
 # pseudo-syllabic units
 units = batch_outputs[0]["units"]  # [3950, 67, ..., 503]
+units = units.unsqueeze(0) + 1  # 0: pad
+
+# unit-to-speech synthesis
+audio_values = decoder(units)
 ```
 
 ## Demo
@@ -57,18 +63,21 @@ You can download a pretrained model from [Hugging Face](https://huggingface.co/r
 
 ## Data Preparation
 
-If you already have LibriSpeech, you can use it by editing [a config file](configs/default.yaml#L14);
-```yaml
-dataset:
-  root: "/path/to/LibriSpeech/root" # ${dataset.root}/LibriSpeech/train-clean-100, train-clean-360, ...
-```
-
-otherwise you can download the new one under `dataset_root`.
+You can download datasets under `dataset_root`.
 ```shell
 dataset_root=data  # be consistent with dataset.root in a config file
 
 sh scripts/download_librispeech.sh ${dataset_root}
+sh scripts/download_libritts.sh ${dataset_root}
+sh scripts/download_slm21.sh  # download sWUGGY and sBLIMP
 ```
+
+> [!TIP]
+> If you already have LibriSpeech, you can use it by editing [a config file](configs/speech2unit/default.yaml#L13);
+> ```yaml
+> dataset:
+>   root: "/path/to/LibriSpeech/root" # ${dataset.root}/LibriSpeech/train-clean-100, train-clean-360, ...
+> ```
 
 Check the directory structure
 ```
@@ -84,7 +93,7 @@ dataset.root in a config file
     └── SPEAKERS.TXT
 ```
 
-## Training & Evaluation
+## Syllable discovery
 
 ```shell
 python main_speech2unit.py --config configs/speech2unit/default.yaml
@@ -94,6 +103,23 @@ To run only a sub-task (train, syllable_segmentation, quantize, or evaluate), sp
 
 ```shell
 python main_speech2unit.py train --config configs/speech2unit/default.yaml
+```
+
+## Unit-to-speech synthesis
+
+```shell
+python main_unit2speech.py train_flow_matching --config=configs/unit2speech/default.yaml
+```
+
+## Speech language modeling
+
+Set the number of GPUs to `nproc_per_node` to enable multi-GPU training.
+
+```shell
+nproc_per_node=1
+
+qsub scripts/run_speechlm.bash configs/speechlm/default.yaml ${nproc_per_node}
+python main_speechlm.py eval --config=configs/speechlm/default.yaml
 ```
 
 ## Citation

@@ -1,5 +1,5 @@
 dataset:
-  wav_dir_train: ""
+  wav_dir: ""
   ext_audio: ".flac"
 
   train: ""
@@ -37,4 +37,5 @@ optim:
 
 speech2unit:
   model_name_or_path: "ryota-komatsu/s5-hubert"
-  num_workers: 16
+  num_workers: 8
+  batch_size: 16   # work with a single 24GB VRAM GPU

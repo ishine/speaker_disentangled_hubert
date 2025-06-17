@@ -12,15 +12,15 @@ dataset:
 
 flow_matching:
   model_name_or_path: "models/flow_matching"
-  batch_size: 400 # work with single 24GB VRAM GPU
+  batch_size: 200 # work with a single 48GB VRAM GPU
   num_workers: 16
-  epoch: 800
+  epoch: 400
   warmup_steps: 1000
   lr: 0.001
   lr_min: 0.0001
   max_norm: 0.1
   summary_interval: 100
-  save_interval_epoch: 200
+  save_interval_epoch: 100
 
   # inference
   dt: 0.1

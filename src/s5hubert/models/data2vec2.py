@@ -241,13 +241,23 @@ class Data2VecMultiModel(PreTrainedModel):
 
     def forward(
         self,
-        source: torch.Tensor,
-        padding_mask: torch.Tensor | None = None,
+        input_values: torch.FloatTensor,
+        attention_mask: torch.LongTensor | None = None,
         output_layer: int | None = None,
     ):
+        """
+        Args:
+            input_values (`torch.FloatTensor` of shape `(batch_size, sequence_length)`):
+                Raw speech waveform.
+            attention_mask (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
+                1: non-mask
+                0: mask (padding)
+        """
+        padding_mask = attention_mask.bool().logical_not() if attention_mask is not None else None
+
         feature_extractor = self.modality_encoders["AUDIO"]
 
-        x = feature_extractor.local_features(source)
+        x = feature_extractor.local_features(input_values)
 
         if padding_mask is not None:
             padding_mask = feature_extractor.convert_padding_mask(x, padding_mask)
@@ -300,7 +310,7 @@ class Data2VecMultiModel(PreTrainedModel):
                 if output_layer is not None and i == len(self.blocks) + output_layer:
                     break
 
-        return layer_results, padding_mask
+        return layer_results, padding_mask.logical_not() if padding_mask is not None else None
 
     def freeze_pretrained_modules(self):
         # CNN

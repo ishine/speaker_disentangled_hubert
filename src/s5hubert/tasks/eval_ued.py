@@ -28,10 +28,9 @@ MODELS = {
 
 def eval_ued(config):
     if config.model.model_type.startswith("s5hubert"):
-        model = S5HubertForSyllableDiscovery.load_pretrained(
+        model = S5HubertForSyllableDiscovery.from_pretrained(
             config.path.checkpoint,
-            config.path.quantizer1,
-            config.path.quantizer2,
+            n_units_step1=config.quantizer.n_clusters1,
             sec_per_syllable=config.mincut.sec_per_syllable,
             merge_threshold=config.mincut.merge_threshold,
             min_duration=config.mincut.min_duration,

@@ -82,19 +82,13 @@ class SylBoostForSequenceClassification(nn.Module):
             `config.num_labels > 1` a classification loss is computed (Cross-Entropy).
         """
 
-        hidden_states, padding_mask = self.hubert(
-            input_values,
-            padding_mask=attention_mask.bool().logical_not(),
-            output_layer=self.segmentation_layer,
-        )
-
+        hidden_states, padding_mask = self.hubert(input_values, attention_mask, self.segmentation_layer)
         hidden_states = hidden_states[-1]
-
         hidden_states = self.projector(hidden_states)
+
         if attention_mask is None:
             pooled_output = hidden_states.mean(dim=1)
         else:
-            padding_mask = padding_mask.logical_not()
             hidden_states[~padding_mask] = 0.0
             pooled_output = hidden_states.sum(dim=1) / padding_mask.sum(dim=1).view(-1, 1)
 

@@ -8,10 +8,10 @@ from torch.utils.tensorboard import SummaryWriter
 from transformers import AutoConfig, AutoModel, AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
 
 from ..bigvgan.bigvgan import BigVGan, BigVGanConfig
-from .configs import ConditionalFlowMatchingConfig
+from .configs import FlowMatchingConfig
 from .data import get_collate_fn
-from .models import ConditionalFlowMatchingModel
-from .utils.misc import fix_random_seed, get_input_embeddings, get_lr_schedule
+from .models import FlowMatchingModel
+from .utils import fix_random_seed, get_input_embeddings, get_lr_schedule
 
 # register BigVGan
 AutoConfig.register("bigvgan", BigVGanConfig)
@@ -19,7 +19,7 @@ AutoModel.register(BigVGanConfig, BigVGan)
 
 
 @torch.inference_mode()
-def validate(config, dataloader, model: ConditionalFlowMatchingModel, step: int, writer: SummaryWriter):
+def validate(config, dataloader, model: FlowMatchingModel, step: int, writer: SummaryWriter):
     model.eval()
 
     torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
@@ -100,8 +100,8 @@ def train_flow_matching(config):
         ),
     )
 
-    model = ConditionalFlowMatchingModel(
-        ConditionalFlowMatchingConfig(
+    model = FlowMatchingModel(
+        FlowMatchingConfig(
             vocab_size=config.flow_matching.vocab_size,
             dim_in=config.flow_matching.dim_in,
             dim_cond_emb=config.flow_matching.dim_cond_emb,

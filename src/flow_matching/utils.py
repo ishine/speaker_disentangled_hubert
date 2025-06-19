@@ -3,7 +3,7 @@ import random
 import numpy as np
 import torch
 
-from ...s5hubert import S5HubertForSyllableDiscovery
+from ..s5hubert import S5HubertForSyllableDiscovery
 
 
 def fix_random_seed(seed=0):

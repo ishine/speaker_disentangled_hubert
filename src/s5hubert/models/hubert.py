@@ -24,7 +24,7 @@ from transformers import Wav2Vec2Processor
 from transformers.modeling_outputs import SequenceClassifierOutput
 from transformers.models.hubert.modeling_hubert import HubertModel
 
-from ..mincut.mincut_utils import mincut_torch
+from ..utils.mincut import mincut_torch
 from ..utils.misc import fix_random_seed
 from .modules import init_module
 

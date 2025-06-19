@@ -8,7 +8,7 @@ import torchaudio
 from transformers import HubertModel
 
 from ...sdhubert.utils.syllable import BoundaryDetectionEvaluator
-from ..mincut.mincut_utils import parallel_mincut
+from ..utils.mincut import parallel_mincut
 
 plt.rcParams["text.usetex"] = True
 

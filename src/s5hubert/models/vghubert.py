@@ -26,7 +26,7 @@ from torch import nn
 from transformers.modeling_outputs import SequenceClassifierOutput
 
 from ...vghubert.models import audio_encoder
-from ..mincut.mincut_utils import mincut_torch
+from ..utils.mincut import mincut_torch
 from ..utils.misc import fix_random_seed
 from .modules import init_module
 

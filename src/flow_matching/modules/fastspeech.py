@@ -21,7 +21,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from ..configs import ConditionalFlowMatchingConfig
+from ..configs import FlowMatchingConfig
 
 
 class SiGLU(nn.Module):
@@ -73,13 +73,13 @@ class FeedForward(nn.Module):
         return hidden_states
 
 
-class ConditionalFlowMatchingDurationPredictor(nn.Module):
+class FlowMatchingDurationPredictor(nn.Module):
     """
     Duration predictor module.
     https://arxiv.org/abs/1905.09263
     """
 
-    def __init__(self, config: ConditionalFlowMatchingConfig):
+    def __init__(self, config: FlowMatchingConfig):
         super().__init__()
         self.log_domain_offset = 1.0
         self.conv = nn.Conv1d(config.dim_cond_emb, 1, kernel_size=3, padding=1)

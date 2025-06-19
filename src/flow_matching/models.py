@@ -32,16 +32,16 @@ from transformers.models.fastspeech2_conformer.modeling_fastspeech2_conformer im
 
 from ..bigvgan.bigvgan import BigVGan, BigVGanConfig
 from ..bigvgan.data import dynamic_range_compression_torch
-from .configs import ConditionalFlowMatchingConfig, ConditionalFlowMatchingWithBigVGanConfig
-from .modules.fastspeech import ConditionalFlowMatchingDurationPredictor
+from .configs import FlowMatchingConfig, FlowMatchingWithBigVGanConfig
+from .modules.fastspeech import FlowMatchingDurationPredictor
 from .modules.time_embed import TimestepEmbedding
 from .modules.transformer import Transformer
 
 
-class ConditionalFlowMatchingModel(PreTrainedModel):
-    config_class = ConditionalFlowMatchingConfig
+class FlowMatchingModel(PreTrainedModel):
+    config_class = FlowMatchingConfig
 
-    def __init__(self, config: ConditionalFlowMatchingConfig, embedding: Optional[nn.Embedding] = None):
+    def __init__(self, config: FlowMatchingConfig, embedding: Optional[nn.Embedding] = None):
         super().__init__(config)
         self.config = config
 
@@ -62,7 +62,7 @@ class ConditionalFlowMatchingModel(PreTrainedModel):
         )
 
         self.to_pred = nn.Linear(config.hidden_size, config.dim_in, bias=False)
-        self.duration_predictor = ConditionalFlowMatchingDurationPredictor(config) if config.predict_duration else None
+        self.duration_predictor = FlowMatchingDurationPredictor(config) if config.predict_duration else None
 
     @property
     def device(self):
@@ -181,12 +181,12 @@ class ConditionalFlowMatchingModel(PreTrainedModel):
         return x1
 
 
-class ConditionalFlowMatchingWithBigVGan(PreTrainedModel):
-    config_class = ConditionalFlowMatchingWithBigVGanConfig
+class FlowMatchingWithBigVGan(PreTrainedModel):
+    config_class = FlowMatchingWithBigVGanConfig
 
-    def __init__(self, config: ConditionalFlowMatchingWithBigVGanConfig, use_cuda_kernel: bool = False):
+    def __init__(self, config: FlowMatchingWithBigVGanConfig, use_cuda_kernel: bool = False):
         super().__init__(config)
-        self.model = ConditionalFlowMatchingModel(config.model_config)
+        self.model = FlowMatchingModel(config.model_config)
         self.vocoder = BigVGan(config.vocoder_config, use_cuda_kernel=use_cuda_kernel)
 
     @classmethod
@@ -195,13 +195,13 @@ class ConditionalFlowMatchingWithBigVGan(PreTrainedModel):
         model_path,
         vocoder_path,
         use_cuda_kernel: bool = False,
-    ) -> "ConditionalFlowMatchingWithBigVGan":
-        model_config = ConditionalFlowMatchingConfig.from_pretrained(model_path)
+    ) -> "FlowMatchingWithBigVGan":
+        model_config = FlowMatchingConfig.from_pretrained(model_path)
         vocoder_config = BigVGanConfig.from_pretrained(vocoder_path)
-        config = ConditionalFlowMatchingWithBigVGanConfig(model_config.to_dict(), vocoder_config.to_dict())
+        config = FlowMatchingWithBigVGanConfig(model_config.to_dict(), vocoder_config.to_dict())
 
         model = cls(config)
-        model.model = ConditionalFlowMatchingModel.from_pretrained(model_path)
+        model.model = FlowMatchingModel.from_pretrained(model_path)
         model.vocoder = BigVGan.from_pretrained(vocoder_path, use_cuda_kernel=use_cuda_kernel)
         return model
 

@@ -5,7 +5,7 @@ from transformers import PretrainedConfig
 from ..bigvgan.bigvgan import BigVGanConfig
 
 
-class ConditionalFlowMatchingConfig(PretrainedConfig):
+class FlowMatchingConfig(PretrainedConfig):
     def __init__(
         self,
         vocab_size: int = 8192,
@@ -39,9 +39,9 @@ class ConditionalFlowMatchingConfig(PretrainedConfig):
         super().__init__(**kwargs)
 
 
-class ConditionalFlowMatchingWithBigVGanConfig(PretrainedConfig):
+class FlowMatchingWithBigVGanConfig(PretrainedConfig):
     model_type = "flow_matching_with_bigvgan"
-    sub_configs = {"model_config": ConditionalFlowMatchingConfig, "vocoder_config": BigVGanConfig}
+    sub_configs = {"model_config": FlowMatchingConfig, "vocoder_config": BigVGanConfig}
 
     def __init__(
         self,
@@ -55,6 +55,6 @@ class ConditionalFlowMatchingWithBigVGanConfig(PretrainedConfig):
         if vocoder_config is None:
             vocoder_config = {}
 
-        self.model_config = ConditionalFlowMatchingConfig(**model_config)
+        self.model_config = FlowMatchingConfig(**model_config)
         self.vocoder_config = BigVGanConfig(**vocoder_config)
         super().__init__(**kwargs)

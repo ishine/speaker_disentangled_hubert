@@ -8,10 +8,10 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from ...sdhubert.utils.syllable import BoundaryDetectionEvaluator
-from ..mincut.mincut_utils import parallel_mincut
 from ..models.s5hubert import S5Hubert
 from ..models.s5hubert_dino import S5HubertDino
 from ..utils.data import LibriSpeech
+from ..utils.mincut import parallel_mincut
 from ..utils.misc import fix_random_seed, get_tri_stage_schedule
 
 

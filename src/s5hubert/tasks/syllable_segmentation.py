@@ -8,11 +8,11 @@ from torch.utils.data import ConcatDataset
 from tqdm import tqdm
 
 from ...sylber.sylber import Segmenter
-from ..mincut.mincut_utils import parallel_mincut
 from ..models.hubert import HubertForSyllableDiscovery
 from ..models.s5hubert import S5HubertForSyllableDiscovery
 from ..models.vghubert import VGHubertForSyllableDiscovery
 from ..utils.data import LibriSpeech
+from ..utils.mincut import parallel_mincut
 
 sys.path.append("src/SyllableLM")
 from ...SyllableLM.extract_units import SylBoostFeatureReader

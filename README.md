@@ -28,14 +28,14 @@ sh scripts/setup.sh
 ```python
 import torchaudio
 
-from src.flow_matching.models import ConditionalFlowMatchingWithBigVGan
+from src.flow_matching import FlowMatchingWithBigVGan
 from src.s5hubert import S5HubertForSyllableDiscovery
 
 wav_path = "/path/to/wav"
 
 # download a pretrained model from hugging face hub
 model = S5HubertForSyllableDiscovery.from_pretrained("ryota-komatsu/s5-hubert").cuda()
-decoder = ConditionalFlowMatchingWithBigVGan.from_pretrained("ryota-komatsu/").cuda()
+decoder = FlowMatchingWithBigVGan.from_pretrained("ryota-komatsu/").cuda()
 
 # load a waveform
 waveform, sr = torchaudio.load(wav_path)

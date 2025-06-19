@@ -1,6 +1,5 @@
-import random
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import torch
 import torchaudio
@@ -46,7 +45,6 @@ class SpeechDataset(torch.utils.data.Dataset):
 
 def get_collate_fn(
     tokenizer,
-    units_per_sample: Optional[int] = None,
 ):
     def collate_fn(batch) -> Dict[str, torch.LongTensor]:
         input_ids = []
@@ -54,14 +52,6 @@ def get_collate_fn(
 
         for item in batch:
             units = item["units"]
-
-            if units_per_sample:
-                diff = len(units) - units_per_sample
-
-                if diff > 0:
-                    start = random.randrange(diff)
-                    units = units[start : start + units_per_sample]
-
             input_ids.append("".join([f"<{unit}>" for unit in units]))
             names.append(item["id"])
 

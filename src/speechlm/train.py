@@ -111,7 +111,6 @@ def train(config):
         sampler=sampler,
         collate_fn=get_collate_fn(
             tokenizer,
-            units_per_sample=config.dataset.units_per_sample,
         ),
     )
 

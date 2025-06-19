@@ -366,8 +366,8 @@ class S5HubertForSyllableDiscovery(HubertPreTrainedModel):
             input_values (`torch.FloatTensor` of shape `(batch_size, sequence_length)`):
                 Raw speech waveform.
             attention_mask (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
-                1: non-mask
-                0: mask
+                1: non-padding
+                0: padding
 
         Returns:
             units (`torch.LongTensor`):

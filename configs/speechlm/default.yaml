@@ -3,8 +3,6 @@ dataset:
   ext_audio: ".flac"
 
   train: ""
-  units_per_sample: 125
-
   swuggy: "ryota-komatsu/swuggy"  # lexical
   sblimp: "ryota-komatsu/sblimp"  # syntactic
 
@@ -20,7 +18,7 @@ model:
 
   lora:
     r: 32
-    lora_alpha: 8
+    lora_alpha: 32
     target_modules: "all-linear"
 
 optim:

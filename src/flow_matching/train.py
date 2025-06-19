@@ -118,7 +118,7 @@ def train_flow_matching(config):
         get_input_embeddings(config.speech2unit.model_name_or_path),
     ).cuda()
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=config.flow_matching.lr, betas=(0.9, 0.98), eps=1e-9)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=config.flow_matching.lr)
 
     # learning rate scheduler
     lr_scheduler = get_lr_schedule(

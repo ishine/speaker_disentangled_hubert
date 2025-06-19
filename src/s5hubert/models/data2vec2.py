@@ -250,8 +250,8 @@ class Data2VecMultiModel(PreTrainedModel):
             input_values (`torch.FloatTensor` of shape `(batch_size, sequence_length)`):
                 Raw speech waveform.
             attention_mask (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
-                1: non-mask
-                0: mask (padding)
+                1: non-padding
+                0: padding
         """
         padding_mask = attention_mask.bool().logical_not() if attention_mask is not None else None
 

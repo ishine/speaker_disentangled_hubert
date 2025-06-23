@@ -129,7 +129,7 @@ def train_flow_matching(config):
         config.flow_matching.lr_min,
     )
 
-    scaler = torch.amp.GradScaler("cuda", init_scale=1e24)
+    scaler = torch.amp.GradScaler("cuda")
     writer = SummaryWriter(os.path.join(config.flow_matching.model_name_or_path, "logs"))
 
     last_epoch = 0
@@ -139,7 +139,7 @@ def train_flow_matching(config):
         model.train()
 
         for batch in train_loader:
-            with torch.amp.autocast("cuda", dtype=torch.bfloat16):
+            with torch.amp.autocast("cuda"):
                 loss = model(
                     input_ids=batch["input_ids"].cuda(),
                     spectrogram_labels=batch["spectrogram_labels"].cuda(),

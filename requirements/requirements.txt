@@ -19,8 +19,10 @@ peft
 praat-parselmouth==0.4.6
 scikit-learn==1.5.0
 scipy==1.13.1
+seaborn
 soundfile==0.12.1
 tensorboard==2.17.0
+textgrid
 timm
 torch==2.5.1+cu121
 torchaudio==2.5.1+cu121
